@@ -92,6 +92,7 @@
 				</configuration>
 			</plugin>
 		</plugins>
+        <finalName>Toolrent-backend</finalName>
 	</build>
 
 </project>
