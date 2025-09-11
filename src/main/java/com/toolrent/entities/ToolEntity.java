@@ -21,11 +21,20 @@ public class ToolEntity {
     @Column(nullable = false)
     private String category;
 
-    @Enumerated(EnumType.STRING)  // Almacena enum como string (e.g., "AVAILABLE")
-    private ToolStatus status = ToolStatus.AVAILABLE;  // Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ToolStatus status = ToolStatus.AVAILABLE; // Default: AVAILABLE
 
     @Column(nullable = false)
-    private Double replacementValue;    //valor de reposición
+    private Double replacementValue; // Valor de reposición
 
-    private Integer stock = 1;  // Default
+    @Column(nullable = false)
+    private Double pricePerDay; // Precio por día de alquiler
+
+    @Column(nullable = false)
+    private Integer stock = 0; // Default: 0, se ajusta al agregar herramientas
+
+    @Column(updatable = false)
+    @Temporal(TemporalType.TIMESTAMP)
+    private java.util.Date createdAt = new java.util.Date(); // Fecha de creación
 }

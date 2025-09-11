@@ -21,12 +21,18 @@ public class KardexMovementEntity {
     @JoinColumn(name = "tool_id", nullable = false)
     private ToolEntity tool;
 
+    @ManyToOne
+    @JoinColumn(name = "customer_id", nullable = false)
+    private CustomerEntity customer; // Cliente al que está asociado el movimiento
+
     @Enumerated(EnumType.STRING)
-    private MovementType type;
+    @Column(nullable = false)
+    private MovementType movementType;
 
-    private LocalDateTime date = LocalDateTime.now();
+    @Column(nullable = false)
+    private LocalDateTime movementDate = LocalDateTime.now();
 
-    private Long userId;
+    private String details; // Descripción del movimiento
 
-    private Integer quantity;
+    private Integer quantity; // Cantidad afectada (e.g., stock)
 }

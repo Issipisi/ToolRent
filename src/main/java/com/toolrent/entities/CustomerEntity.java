@@ -21,10 +21,13 @@ public class CustomerEntity {
     @Column(nullable = false, unique = true)
     private String rut;
 
+    @Column(nullable = false)
     private String phone;
 
+    @Column(nullable = false, unique = true)
     private String email;
 
     @Enumerated(EnumType.STRING)  // Almacena enum como string
+    @Column(nullable = false)
     private CustomerStatus status = CustomerStatus.ACTIVE; //Default
 }

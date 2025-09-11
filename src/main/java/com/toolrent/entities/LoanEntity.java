@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "loans") //prestamos
+@Table(name = "loans")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -19,16 +19,22 @@ public class LoanEntity {
 
     @ManyToOne
     @JoinColumn(name = "customer_id", nullable = false)
-    private CustomerEntity customer;  // Relación
+    private CustomerEntity customer;
 
     @ManyToOne
     @JoinColumn(name = "tool_id", nullable = false)
     private ToolEntity tool;
 
-    private LocalDateTime loanDate;     //Fecha prestamo
-    private LocalDateTime dueDate;      //Fecha de vencimiento
+    @Column(nullable = false)
+    private LocalDateTime loanDate = LocalDateTime.now();
+
+    @Column(nullable = false)
+    private LocalDateTime dueDate;
+
     private LocalDateTime returnDate;
 
-    private Double fineAmount = 0.0;    //multa
-    private Double damageCharge = 0.0;  //daño
+    private Double totalCost; // Calculado según días y pricePerDay
+
+    private Double fineAmount = 0.0; // Multa por retraso
+    private Double damageCharge = 0.0; // Cargo por daño
 }

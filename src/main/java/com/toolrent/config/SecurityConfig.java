@@ -4,17 +4,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInitiatedLogoutSuccessHandler;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -23,51 +21,67 @@ import java.util.Map;
 import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
-@EnableMethodSecurity  // Para @PreAuthorize en métodos
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                            ClientRegistrationRepository repo) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable)  // Deshabilita CSRF para APIs REST
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))  // Stateless para JWT
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(s -> s
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                        // NO STATELESS mientras se use login browser
+                        //.sessionManagement(s -> s.sessionCreationPolicy(STATELESS))
+
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/swagger-ui.html",
-                                         "/swagger-ui/**",
-                                         "/v3/api-docs/**").permitAll()  // Swagger abierto
+                        .requestMatchers(
+                                "/swagger-ui/**",
+                                "/swagger-ui/index.html",
+                                "/v3/api-docs/**",
+                                "/login/oauth2/code/keycloak",
+                                "/error"               // SpringBoot devuelve 401/403 aquí
+                        ).permitAll()
+                        .requestMatchers("/users/**").hasRole("ADMIN")
+                        .requestMatchers("/tools/**").hasAnyRole("ADMIN", "EMPLOYEE")
+                        .requestMatchers("/customers/**").hasAnyRole("ADMIN", "EMPLOYEE")
+                        .anyRequest().authenticated())
 
-                        .requestMatchers("/auth/**").permitAll()  // Login redirect
-
-                        .requestMatchers("/users/**").hasRole("ADMIN")  // Solo ADMIN (de Keycloak)
-
-                        .anyRequest().authenticated()  // Todo lo demás requiere token
-                )
                 .oauth2Login(withDefaults())
                 .logout(logout -> logout
-                        .logoutSuccessUrl("http://localhost:8080/realms/test/protocol/openid-connect/logout?redirect_uri=http://localhost:8090/api/test"))
+                        .logoutSuccessHandler(oidcLogoutSuccessHandler(repo)));
 
-                .oauth2ResourceServer(oauth2 ->
-                        oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter()))// Valida JWT
-                );
+        http.oauth2ResourceServer(oauth2 ->
+                oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthConverter())));
+
         return http.build();
     }
 
-
+    /* extrae roles de Keycloak */
     private JwtAuthenticationConverter jwtAuthConverter() {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(jwt -> {
             Collection<GrantedAuthority> authorities = new ArrayList<>();
-            Map<String, Object> realmAccess = (Map<String, Object>) jwt.getClaims().get("realm_access");
 
-            if (realmAccess != null && realmAccess.get("roles") instanceof List<?>) {
-                List<?> roles = (List<?>) realmAccess.get("roles");
-                roles.forEach(r -> authorities.add(new SimpleGrantedAuthority("ROLE_" + r)));
+            // ➜ cast SEGURO con instanceof
+            Object realmAccessObj = jwt.getClaims().get("realm_access");
+            if (realmAccessObj instanceof Map<?, ?> realmAccess) {
+                Object rolesObj = realmAccess.get("roles");
+                if (rolesObj instanceof List<?> roles) {
+                    roles.forEach(r -> authorities.add(new SimpleGrantedAuthority("ROLE_" + r)));
+                }
             }
-
             return authorities;
         });
         return converter;
+    }
+
+    /* logout global */
+    private OidcClientInitiatedLogoutSuccessHandler oidcLogoutSuccessHandler(ClientRegistrationRepository repo) {
+        OidcClientInitiatedLogoutSuccessHandler handler =
+                new OidcClientInitiatedLogoutSuccessHandler(repo);
+        handler.setPostLogoutRedirectUri("http://localhost:8090/swagger-ui.html");
+        return handler;
     }
 }
