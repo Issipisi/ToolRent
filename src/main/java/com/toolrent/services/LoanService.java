@@ -1,5 +1,6 @@
 package com.toolrent.services;
 
+import com.toolrent.config.SecurityConfig;
 import com.toolrent.entities.*;
 import com.toolrent.repositories.CustomerRepository;
 import com.toolrent.repositories.LoanRepository;
@@ -58,7 +59,7 @@ public class LoanService {
         movement.setTool(tool);
         movement.setCustomer(customer); // ← cliente real
         movement.setMovementType(MovementType.LOAN);
-        movement.setDetails("Préstamo a cliente ID: " + customerId);
+        movement.setDetails("Préstamo a cliente ID: " + customerId + " - Usuario: " + SecurityConfig.getCurrentUsername());
         kardexMovementRepository.save(movement);
 
         return savedLoan;
@@ -89,7 +90,7 @@ public class LoanService {
         movement.setTool(tool);
         movement.setCustomer(customer); // ← Usar el cliente persistente del préstamo
         movement.setMovementType(MovementType.RETURN);
-        movement.setDetails("Devolución de préstamo ID: " + loanId);
+        movement.setDetails("Devolución de préstamo ID: " + loanId + " - Usuario: " + SecurityConfig.getCurrentUsername());
 
         kardexMovementRepository.save(movement);
     }

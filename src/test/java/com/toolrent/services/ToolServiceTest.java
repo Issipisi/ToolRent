@@ -1,12 +1,13 @@
 package com.toolrent.services;
 
-import com.toolrent.entities.ToolEntity;
-import com.toolrent.entities.ToolStatus;
+import com.toolrent.entities.*;
+import com.toolrent.repositories.KardexMovementRepository;
 import com.toolrent.repositories.ToolRepository;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,33 +24,75 @@ class ToolServiceTest {
     @Mock
     private ToolRepository toolRepository;
 
+    @Mock
+    private KardexMovementRepository kardexMovementRepository;
+
     @InjectMocks
     private ToolService toolService;
 
-    /*-------- REGISTER TOOL --------*/
+    /* ---------- REGISTER TOOL ---------- */
 
     @Test
     void whenRegisterTool_withValidData_thenSuccess() {
-        ToolEntity saved = buildTool(1L, "Taladro", "Eléctrica", 150.0, 15.0, ToolStatus.AVAILABLE);
+        ToolEntity saved = buildTool(1L, "Taladro", "Eléctrica", 150.0, 15.0, 5, ToolStatus.AVAILABLE);
         when(toolRepository.save(any(ToolEntity.class))).thenReturn(saved);
 
-        ToolEntity result = toolService.registerTool("Taladro", "Eléctrica", 150.0, 15.0);
+        ToolEntity result = toolService.registerTool("Taladro", "Eléctrica", 150.0, 15.0, 5);
 
         assertThat(result).isNotNull();
         assertThat(result.getName()).isEqualTo("Taladro");
         assertThat(result.getCategory()).isEqualTo("Eléctrica");
         assertThat(result.getReplacementValue()).isEqualTo(150.0);
         assertThat(result.getPricePerDay()).isEqualTo(15.0);
-        assertThat(result.getStock()).isEqualTo(1);
+        assertThat(result.getStock()).isEqualTo(5); // ← stock elegido
         assertThat(result.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
         verify(toolRepository).save(any(ToolEntity.class));
+        verify(kardexMovementRepository).save(any(KardexMovementEntity.class)); // ← Kardex creado
     }
 
-    /* -------- NULLOS -------- */
+    @Test
+    void whenRegisterTool_withNegativeStock_thenThrows() {
+        assertThatThrownBy(() -> toolService.registerTool("A", "B", 10.0, 1.0, -5))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("El stock no puede ser negativo");
+        verifyNoInteractions(toolRepository);
+    }
+
+    @Test
+    void whenRegisterTool_withZeroStock_thenStillSaves() {
+        ToolEntity saved = buildTool(1L, "A", "B", 10.0, 1.0, 0, ToolStatus.AVAILABLE);
+        when(toolRepository.save(any(ToolEntity.class))).thenReturn(saved);
+
+        ToolEntity result = toolService.registerTool("A", "B", 10.0, 1.0, 0);
+
+        assertThat(result.getStock()).isZero();
+        verify(kardexMovementRepository).save(any(KardexMovementEntity.class));
+    }
+
+    @Test
+    void whenRegisterTool_withMaxValues_thenOk() {
+        String bigName = "X".repeat(255);
+        String bigCat = "Y".repeat(100);
+        double maxReplacement = 1_000_000.0;
+        double maxPrice = 99_999.99;
+
+        ToolEntity saved = buildTool(1L, bigName, bigCat, maxReplacement, maxPrice, 50, ToolStatus.AVAILABLE);
+        when(toolRepository.save(any(ToolEntity.class))).thenReturn(saved);
+
+        ToolEntity result = toolService.registerTool(bigName, bigCat, maxReplacement, maxPrice, 50);
+
+        assertThat(result.getName()).hasSize(255);
+        assertThat(result.getCategory()).hasSize(100);
+        assertThat(result.getStock()).isEqualTo(50);
+        verify(kardexMovementRepository).save(any(KardexMovementEntity.class));
+    }
+
+    /* ---------- NULLOS ---------- */
     @ParameterizedTest
     @NullSource
-    void whenRegisterTool_withNullName_thenThrows(String name) {
-        assertThatThrownBy(() -> toolService.registerTool(name, "cat", 100.0, 10.0))
+    @ValueSource(strings = {"", " ", "  "})
+    void whenRegisterTool_withNullOrBlankName_thenThrows(String name) {
+        assertThatThrownBy(() -> toolService.registerTool(name, "cat", 100.0, 10.0, 1))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("obligatorios");
         verifyNoInteractions(toolRepository);
@@ -58,7 +101,7 @@ class ToolServiceTest {
     @ParameterizedTest
     @NullSource
     void whenRegisterTool_withNullCategory_thenThrows(String category) {
-        assertThatThrownBy(() -> toolService.registerTool("name", category, 100.0, 10.0))
+        assertThatThrownBy(() -> toolService.registerTool("name", category, 100.0, 10.0, 1))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("obligatorios");
     }
@@ -66,106 +109,110 @@ class ToolServiceTest {
     @ParameterizedTest
     @NullSource
     void whenRegisterTool_withNullReplacementValue_thenThrows(Double replacementValue) {
-        assertThatThrownBy(() -> toolService.registerTool("name", "cat", replacementValue, 10.0))
+        assertThatThrownBy(() -> toolService.registerTool("name", "cat", replacementValue, 10.0, 1))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("obligatorios");
     }
 
-    /* -------- VALORES EXTREMOS -------- */
-    @Test
-    void whenRegisterTool_withMaxValues_thenOk() {
-        String bigName = "X".repeat(255);
-        String bigCat = "Y".repeat(100);
-        double maxReplacement = 1_000_000.0;
-        double maxPrice = 99_999.99;
-
-        ToolEntity saved = buildTool(1L, bigName, bigCat, maxReplacement, maxPrice, ToolStatus.AVAILABLE);
-        when(toolRepository.save(any(ToolEntity.class))).thenReturn(saved);
-
-        ToolEntity result = toolService.registerTool(bigName, bigCat, maxReplacement, maxPrice);
-
-        assertThat(result.getName()).hasSize(255);
-        assertThat(result.getCategory()).hasSize(100);
-        assertThat(result.getReplacementValue()).isEqualTo(maxReplacement);
-        assertThat(result.getPricePerDay()).isEqualTo(maxPrice);
-    }
-
-    @Test
-    void whenRegisterTool_withZeroPrice_thenStillSaves() {
-        ToolEntity saved = buildTool(1L, "A", "B", 10.0, 0.0, ToolStatus.AVAILABLE);
-        when(toolRepository.save(any(ToolEntity.class))).thenReturn(saved);
-
-        ToolEntity result = toolService.registerTool("A", "B", 10.0, 0.0);
-
-        assertThat(result.getPricePerDay()).isZero();
-    }
-
-    @Test
-    void whenRegisterTool_withNegativePrice_thenStillSaves() {
-        ToolEntity saved = buildTool(1L, "A", "B", 10.0, -5.0, ToolStatus.AVAILABLE);
-        when(toolRepository.save(any(ToolEntity.class))).thenReturn(saved);
-
-        ToolEntity result = toolService.registerTool("A", "B", 10.0, -5.0);
-
-        assertThat(result.getPricePerDay()).isEqualTo(-5.0);
-    }
-
-    /* -------- STOCK POR DEFECTO -------- */
-    @Test
-    void whenRegisterTool_withoutStockParam_thenDefaultsToOne() {
-        ToolEntity saved = buildTool(1L, "H", "C", 50.0, 5.0, ToolStatus.AVAILABLE);
-        when(toolRepository.save(any(ToolEntity.class))).thenReturn(saved);
-
-        ToolEntity result = toolService.registerTool("H", "C", 50.0, 5.0);
-
-        assertThat(result.getStock()).isEqualTo(1);
-    }
-
-    /*-------- CHANGE STATE TOOL --------*/
-
+    /* ---------- CHANGE STATUS ---------- */
     @Test
     void whenChangeStatus_toLoaned_thenSuccess() {
-        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0,
-                ToolStatus.AVAILABLE);
-
+        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 2, ToolStatus.AVAILABLE);
         when(toolRepository.findById(1L)).thenReturn(Optional.of(tool));
-        when(toolRepository.save(any(ToolEntity.class))).thenReturn(tool); // ← devuelve la misma
+        when(toolRepository.save(any(ToolEntity.class))).thenReturn(tool);
 
         ToolEntity result = toolService.changeStatus(1L, ToolStatus.LOANED);
 
         assertThat(result.getStatus()).isEqualTo(ToolStatus.LOANED);
+        assertThat(result.getStock()).isEqualTo(2); // ← no cambia
         verify(toolRepository).save(tool);
+        verifyNoInteractions(kardexMovementRepository); // ← NO genera Kardex
+    }
+
+    @Test
+    void whenChangeStatusToAvailable_thenIncrementStock() {
+        ToolEntity tool = buildTool(1L, "T", "C", 100.0, 10.0, 3, ToolStatus.LOANED);
+        when(toolRepository.findById(1L)).thenReturn(Optional.of(tool));
+        when(toolRepository.save(any(ToolEntity.class))).thenReturn(tool);
+
+        ToolEntity result = toolService.changeStatus(1L, ToolStatus.AVAILABLE);
+
+        assertThat(result.getStock()).isEqualTo(4); // ← +1
+        assertThat(result.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
+        verifyNoInteractions(kardexMovementRepository); // ← NO genera Kardex
     }
 
     @Test
     void whenChangeStatus_toRetired_thenThrows() {
-        assertThatThrownBy(() -> toolService.changeStatus(1L, ToolStatus.RETIRED))
+        Long id = 1L;
+        when(toolRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> toolService.changeStatus(id, ToolStatus.RETIRED))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Error");
+                .hasMessageContaining("Tool not found"); // ← texto real
     }
 
-    /*-------- DESACTIVATE TOOL --------*/
+    /* ---------- UPDATE STOCK ---------- */
 
+    @Test
+    void whenUpdateStock_withPositiveDelta_thenIncreases() {
+        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 5, ToolStatus.AVAILABLE);
+        when(toolRepository.findById(1L)).thenReturn(Optional.of(tool));
+        when(toolRepository.save(any(ToolEntity.class))).thenReturn(tool);
+
+        ToolEntity result = toolService.updateStock(1L, 3);
+
+        assertThat(result.getStock()).isEqualTo(8);
+        verify(toolRepository).save(tool);
+        verifyNoInteractions(kardexMovementRepository); // ← no genera Kardex
+    }
+
+    @Test
+    void whenUpdateStock_withNegativeDelta_thenDecreases() {
+        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 10, ToolStatus.AVAILABLE);
+        when(toolRepository.findById(1L)).thenReturn(Optional.of(tool));
+        when(toolRepository.save(any(ToolEntity.class))).thenReturn(tool);
+
+        ToolEntity result = toolService.updateStock(1L, -4);
+
+        assertThat(result.getStock()).isEqualTo(6);
+        verify(toolRepository).save(tool);
+    }
+
+    @Test
+    void whenUpdateStock_withNegativeResult_thenThrows() {
+        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 2, ToolStatus.AVAILABLE);
+        when(toolRepository.findById(1L)).thenReturn(Optional.of(tool));
+
+        assertThatThrownBy(() -> toolService.updateStock(1L, -5))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Stock resultante no puede ser negativo");
+
+        verify(toolRepository, never()).save(any());
+    }
+
+    @Test
+    void whenUpdateStock_withNotFoundId_thenThrows() {
+        Long id = 9999L;
+        when(toolRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> toolService.updateStock(id, 1))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Tool not found");
+    }
+
+    /* ---------- DESACTIVATE TOOL ---------- */
     @Test
     void whenDesactivateTool_withExistingId_thenSetsStatusRetired() {
         Long id = 1L;
-        ToolEntity tool = buildTool(id, "T", "C", 100.0, 10.0, ToolStatus.AVAILABLE);
+        ToolEntity tool = buildTool(id, "T", "C", 100.0, 10.0, 1, ToolStatus.AVAILABLE);
         when(toolRepository.findById(id)).thenReturn(Optional.of(tool));
 
         toolService.desactivateTool(id);
 
         assertThat(tool.getStatus()).isEqualTo(ToolStatus.RETIRED);
         verify(toolRepository).save(tool);
-    }
-
-    @Test
-    void whenDesactivateTool_withNegativeId_thenThrows() {
-        Long id = -5L;
-        when(toolRepository.findById(id)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> toolService.desactivateTool(id))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Tool not found");
+        verify(kardexMovementRepository).save(any(KardexMovementEntity.class)); // ← Kardex creado
     }
 
     @Test
@@ -178,13 +225,12 @@ class ToolServiceTest {
                 .hasMessageContaining("Tool not found");
     }
 
-    /*-------- GET ALL TOOLS --------*/
-
+    /* ---------- GET ALL TOOLS ---------- */
     @Test
     void whenGetAllTools_thenReturnsList() {
         List<ToolEntity> data = List.of(
-                buildTool(1L, "A", "C1", 10.0, 1.0, ToolStatus.AVAILABLE),
-                buildTool(2L, "B", "C2", 20.0, 2.0, ToolStatus.RETIRED)
+                buildTool(1L, "A", "C1", 10.0, 1.0, 5, ToolStatus.AVAILABLE),
+                buildTool(2L, "B", "C2", 20.0, 2.0, 0, ToolStatus.RETIRED)
         );
         when(toolRepository.findAll()).thenReturn(data);
 
@@ -203,17 +249,17 @@ class ToolServiceTest {
         assertThat(result).isEmpty();
     }
 
-    /*-------- HELPER --------*/
-
-    private ToolEntity buildTool(Long id, String name, String category, Double replacementValue,
-                                 Double pricePerDay, ToolStatus status) {
+    /* ---------- HELPER ---------- */
+    private ToolEntity buildTool(Long id, String name, String category,
+                                 Double replacementValue, Double pricePerDay,
+                                 int stock, ToolStatus status) {
         ToolEntity t = new ToolEntity();
         t.setId(id);
         t.setName(name);
         t.setCategory(category);
         t.setReplacementValue(replacementValue);
         t.setPricePerDay(pricePerDay);
-        t.setStock(1);
+        t.setStock(stock);
         t.setStatus(status);
         return t;
     }
