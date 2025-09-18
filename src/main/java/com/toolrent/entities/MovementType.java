@@ -1,6 +1,9 @@
 package com.toolrent.entities;
 
 public enum MovementType {
-    REGISTRY, LOAN, RETURN, RETIRE, REPAIR
-    //Registro, Préstamo, Devolución, Retiro, Reparación
+    REGISTRY,   //Registro
+    LOAN,       //Préstamo
+    RETURN,     //Devolución
+    RETIRE,     //Retiro
+    REPAIR      //Reparación
 }

@@ -15,6 +15,10 @@ public class ToolEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "tariff_id", nullable = false)
+    private TariffEntity tariff;
+
     @Column(nullable = false)
     private String name;
 

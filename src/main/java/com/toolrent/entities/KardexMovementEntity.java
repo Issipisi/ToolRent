@@ -33,6 +33,4 @@ public class KardexMovementEntity {
     private LocalDateTime movementDate = LocalDateTime.now();
 
     private String details; // Descripción del movimiento
-
-    private Integer quantity; // Cantidad afectada (e.g., stock)
 }

@@ -35,11 +35,13 @@ class LoanServiceTest {
     @InjectMocks
     private LoanService loanService;
 
-    /* ---------- REGISTRAR PRÉSTAMO ---------- */
+    /* ---------------------------------------------------------- */
+    /* --------------------- REGISTRAR PRÉSTAMO ----------------- */
+    /* ---------------------------------------------------------- */
 
     @Test
+    @DisplayName("Préstamo ok: herramienta y cliente existentes, dueDate futuro, stock disminuye 1 y permanece AVAILABLE")
     void whenRegisterLoan_withValidData_thenSuccess() {
-        // Given
         Long toolId = 1L;
         Long customerId = 10L;
         LocalDateTime dueDate = LocalDateTime.now().plusDays(5);
@@ -51,22 +53,38 @@ class LoanServiceTest {
         when(customerRepository.findById(customerId)).thenReturn(Optional.of(customer));
         when(loanRepository.save(any(LoanEntity.class))).thenAnswer(i -> i.getArgument(0));
 
-        // When
         LoanEntity result = loanService.registerLoan(toolId, customerId, dueDate);
 
-        // Then
         assertThat(result).isNotNull();
         assertThat(result.getTool()).isEqualTo(tool);
         assertThat(result.getCustomer()).isEqualTo(customer);
         assertThat(result.getDueDate()).isEqualTo(dueDate);
-        assertThat(tool.getStatus()).isEqualTo(ToolStatus.LOANED);
-        assertThat(tool.getStock()).isEqualTo(4); // -1
+        assertThat(tool.getStock()).isEqualTo(4);
+        assertThat(tool.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
 
         verify(toolRepository).save(tool);
         verify(kardexMovementRepository).save(any(KardexMovementEntity.class));
     }
 
     @Test
+    @DisplayName("Última unidad en stock: al prestarla el estado pasa a LOANED")
+    void whenRegisterLoan_andLastUnit_thenToolStatusIsLoaned() {
+        Long toolId = 1L;
+        ToolEntity tool = buildTool(toolId, "A", "B", 100.0, 10.0, 1, ToolStatus.AVAILABLE);
+        CustomerEntity customer = buildCustomer(10L, "Luis", "11.111.111-1", "+56911111111", "luis@test.com");
+
+        when(toolRepository.findById(toolId)).thenReturn(Optional.of(tool));
+        when(customerRepository.findById(10L)).thenReturn(Optional.of(customer));
+        when(loanRepository.save(any(LoanEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        loanService.registerLoan(toolId, 10L, LocalDateTime.now().plusDays(2));
+
+        assertThat(tool.getStock()).isZero();
+        assertThat(tool.getStatus()).isEqualTo(ToolStatus.LOANED);
+    }
+
+    @Test
+    @DisplayName("Herramienta no disponible (stock 0 o estado LOANED) → excepción")
     void whenRegisterLoan_withToolNotAvailable_thenThrows() {
         ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 0, ToolStatus.LOANED);
         when(toolRepository.findById(1L)).thenReturn(Optional.of(tool));
@@ -79,6 +97,7 @@ class LoanServiceTest {
     }
 
     @Test
+    @DisplayName("Cliente inexistente → excepción sin tocar base")
     void whenRegisterLoan_withCustomerNotFound_thenThrows() {
         ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 1, ToolStatus.AVAILABLE);
         when(toolRepository.findById(1L)).thenReturn(Optional.of(tool));
@@ -92,6 +111,7 @@ class LoanServiceTest {
     }
 
     @Test
+    @DisplayName("Herramienta inexistente → excepción")
     void whenRegisterLoan_withToolNotFound_thenThrows() {
         when(toolRepository.findById(999L)).thenReturn(Optional.empty());
 
@@ -103,13 +123,11 @@ class LoanServiceTest {
     }
 
     @Test
+    @DisplayName("DueDate en el pasado: se cobra 1 día (mínimo forzado)")
     void whenRegisterLoan_withDueDateBeforeNow_thenCalculatesOneDay() {
-        // DueDate en el pasado → days ≤ 0 → devuelve 1 día
-        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 1,
-                ToolStatus.AVAILABLE);
-        CustomerEntity customer = buildCustomer(10L, "Ana", "11.111.111-1", "+56911111111",
-                "ana@test.com");
-        LocalDateTime dueDate = LocalDateTime.now().minusDays(2); // ← antes de hoy
+        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 1, ToolStatus.AVAILABLE);
+        CustomerEntity customer = buildCustomer(10L, "Ana", "11.111.111-1", "+56911111111", "ana@test.com");
+        LocalDateTime dueDate = LocalDateTime.now().minusDays(2);
 
         when(toolRepository.findById(1L)).thenReturn(Optional.of(tool));
         when(customerRepository.findById(10L)).thenReturn(Optional.of(customer));
@@ -117,18 +135,19 @@ class LoanServiceTest {
 
         LoanEntity result = loanService.registerLoan(1L, 10L, dueDate);
 
-        assertThat(result.getTotalCost()).isEqualTo(10.0); // 1 día × 10.0
+        assertThat(result.getTotalCost()).isEqualTo(10.0);
         verify(kardexMovementRepository).save(any(KardexMovementEntity.class));
     }
 
-    /* ---------- DEVOLUCIÓN ---------- */
+    /* ---------------------------------------------------------- */
+    /* --------------------- DEVOLUCIÓN ------------------------- */
+    /* ---------------------------------------------------------- */
 
     @Test
+    @DisplayName("Devolución puntual: stock +1, sin multa, estado AVAILABLE")
     void whenReturnLoan_onTime_thenSuccess() {
-        // Given
         Long loanId = 1L;
         LocalDateTime dueDate = LocalDateTime.now().plusDays(5);
-        LocalDateTime returnDate = dueDate.minusDays(1); // antes
 
         ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 0, ToolStatus.LOANED);
         CustomerEntity customer = buildCustomer(10L, "Luis", "22.222.222-2", "+56987654321", "luis@test.com");
@@ -136,41 +155,12 @@ class LoanServiceTest {
 
         when(loanRepository.findById(loanId)).thenReturn(Optional.of(loan));
 
-        // When
         loanService.returnLoan(loanId);
 
-        // Then
-        assertThat(tool.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
-        assertThat(tool.getStock()).isEqualTo(1); // +1
-        assertThat(loan.getReturnDate()).isNotNull();
-        assertThat(loan.getFineAmount()).isZero(); // no hay retraso
-
-        verify(toolRepository).save(tool);
-        verify(loanRepository).save(loan);
-        verify(kardexMovementRepository).save(any(KardexMovementEntity.class)); // RETURN
-    }
-
-    @Test
-    void whenReturnLoan_withDelay_thenAppliesFine() {
-        // Given
-        Long loanId = 1L;
-        LocalDateTime dueDate = LocalDateTime.now().minusDays(3); // vencido
-        LocalDateTime returnDate = LocalDateTime.now(); // hoy
-
-        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 0, ToolStatus.LOANED);
-        CustomerEntity customer = buildCustomer(10L, "Ana", "11.111.111-1", "+56911111111", "ana@test.com");
-        LoanEntity loan = buildLoan(loanId, customer, tool, dueDate);
-
-        when(loanRepository.findById(loanId)).thenReturn(Optional.of(loan));
-
-        // When
-        loanService.returnLoan(loanId);
-
-        // Then
         assertThat(tool.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
         assertThat(tool.getStock()).isEqualTo(1);
         assertThat(loan.getReturnDate()).isNotNull();
-        assertThat(loan.getFineAmount()).isEqualTo(3000.0); // 3 días × 1000
+        assertThat(loan.getFineAmount()).isZero();
 
         verify(toolRepository).save(tool);
         verify(loanRepository).save(loan);
@@ -178,6 +168,31 @@ class LoanServiceTest {
     }
 
     @Test
+    @DisplayName("Devolución atrasada: calcula multa 3 días × 1000 y actualiza stock")
+    void whenReturnLoan_withDelay_thenAppliesFine() {
+        Long loanId = 1L;
+        LocalDateTime dueDate = LocalDateTime.now().minusDays(3);
+
+        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 0, ToolStatus.LOANED);
+        CustomerEntity customer = buildCustomer(10L, "Ana", "11.111.111-1", "+56911111111", "ana@test.com");
+        LoanEntity loan = buildLoan(loanId, customer, tool, dueDate);
+
+        when(loanRepository.findById(loanId)).thenReturn(Optional.of(loan));
+
+        loanService.returnLoan(loanId);
+
+        assertThat(tool.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
+        assertThat(tool.getStock()).isEqualTo(1);
+        assertThat(loan.getReturnDate()).isNotNull();
+        assertThat(loan.getFineAmount()).isEqualTo(3000.0);
+
+        verify(toolRepository).save(tool);
+        verify(loanRepository).save(loan);
+        verify(kardexMovementRepository).save(any(KardexMovementEntity.class));
+    }
+
+    @Test
+    @DisplayName("Préstamo inexistente → excepción")
     void whenReturnLoan_withLoanNotFound_thenThrows() {
         Long loanId = 999L;
         when(loanRepository.findById(loanId)).thenReturn(Optional.empty());
@@ -189,19 +204,24 @@ class LoanServiceTest {
         verifyNoInteractions(toolRepository, kardexMovementRepository);
     }
 
-    /* ---------- HELPERS ---------- */
+    /* ---------------------------------------------------------- */
+    /* --------------------- HELPERS ---------------------------- */
+    /* ---------------------------------------------------------- */
+
     private ToolEntity buildTool(Long id, String name, String category,
                                  Double replacementValue, Double pricePerDay,
-                                 int stock, ToolStatus status) {
-        ToolEntity t = new ToolEntity();
-        t.setId(id);
-        t.setName(name);
-        t.setCategory(category);
-        t.setReplacementValue(replacementValue);
-        t.setPricePerDay(pricePerDay);
-        t.setStock(stock);
-        t.setStatus(status);
-        return t;
+                                 Integer stock, ToolStatus status) {
+        ToolEntity tool = new ToolEntity();
+        tool.setId(id);
+        tool.setName(name);
+        tool.setCategory(category);
+        tool.setReplacementValue(replacementValue);
+        tool.setPricePerDay(pricePerDay);
+        tool.setStock(stock);
+        tool.setStatus(status);
+        TariffEntity tariff = buildTariff(pricePerDay, pricePerDay * 100);
+        tool.setTariff(tariff);
+        return tool;
     }
 
     private CustomerEntity buildCustomer(Long id, String name, String rut, String phone, String email) {
@@ -215,8 +235,7 @@ class LoanServiceTest {
         return c;
     }
 
-    private LoanEntity buildLoan(Long id, CustomerEntity customer, ToolEntity tool,
-                                 LocalDateTime dueDate) {
+    private LoanEntity buildLoan(Long id, CustomerEntity customer, ToolEntity tool, LocalDateTime dueDate) {
         LoanEntity l = new LoanEntity();
         l.setId(id);
         l.setCustomer(customer);
@@ -226,5 +245,12 @@ class LoanServiceTest {
         l.setTotalCost(0.0);
         l.setFineAmount(0.0);
         return l;
+    }
+
+    private TariffEntity buildTariff(Double dailyRentalRate, Double dailyFineRate) {
+        TariffEntity t = new TariffEntity();
+        t.setDailyRentalRate(dailyRentalRate);
+        t.setDailyFineRate(dailyFineRate);
+        return t;
     }
 }

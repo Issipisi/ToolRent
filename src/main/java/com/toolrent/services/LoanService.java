@@ -2,10 +2,7 @@ package com.toolrent.services;
 
 import com.toolrent.config.SecurityConfig;
 import com.toolrent.entities.*;
-import com.toolrent.repositories.CustomerRepository;
-import com.toolrent.repositories.LoanRepository;
-import com.toolrent.repositories.KardexMovementRepository;
-import com.toolrent.repositories.ToolRepository;
+import com.toolrent.repositories.*;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -17,7 +14,9 @@ public class LoanService {
     private final LoanRepository loanRepository;
     private final ToolRepository toolRepository;
     private final KardexMovementRepository kardexMovementRepository;
-    private final CustomerRepository customerRepository; // ← agregado
+    private final CustomerRepository customerRepository;
+
+
 
     public LoanService(LoanRepository loanRepository,
                        ToolRepository toolRepository,
@@ -48,8 +47,10 @@ public class LoanService {
         loan.setDueDate(dueDate);
         loan.setTotalCost(calculateTotalCost(tool, dueDate));
 
-        tool.setStatus(ToolStatus.LOANED);
         tool.setStock(tool.getStock() - 1);
+        if (tool.getStock() == 0) {              // solo cuando se acaban
+            tool.setStatus(ToolStatus.LOANED);
+        }
         toolRepository.save(tool);
 
         LoanEntity savedLoan = loanRepository.save(loan);
@@ -79,11 +80,18 @@ public class LoanService {
 
         if (loan.getReturnDate().isAfter(loan.getDueDate())) {
             long daysLate = ChronoUnit.DAYS.between(loan.getDueDate(), loan.getReturnDate());
-            loan.setFineAmount(daysLate * 1000.0);
+            loan.setFineAmount(daysLate * 2500.0);
         }
 
         toolRepository.save(tool);
         loanRepository.save(loan);
+
+
+        if (loan.getReturnDate().isAfter(loan.getDueDate())) {
+            long lateDays = ChronoUnit.DAYS.between(loan.getDueDate(), loan.getReturnDate());
+            double dailyFine = loan.getTool().getTariff().getDailyFineRate(); // ← tarifa propia
+            loan.setFineAmount(lateDays * dailyFine);
+        }
 
         // Generar movimiento en Kardex - USAR EL CLIENTE REAL
         KardexMovementEntity movement = new KardexMovementEntity();
@@ -97,6 +105,7 @@ public class LoanService {
 
     private Double calculateTotalCost(ToolEntity tool, LocalDateTime dueDate) {
         long days = ChronoUnit.DAYS.between(LocalDateTime.now(), dueDate);
-        return tool.getPricePerDay() * (days > 0 ? days : 1);
+        days = Math.max(1, days);          // ← nunca menor que 1
+        return tool.getPricePerDay() * days;
     }
 }

@@ -29,19 +29,19 @@ class CustomerServiceTest {
     @InjectMocks
     private CustomerService customerService;
 
-    /*-------- REGISTER CUSTOMERS --------*/
+    /* ---------------------------------------------------------- */
+    /* --------------------- ALTAS / REGISTRO ------------------- */
+    /* ---------------------------------------------------------- */
 
     @Test
+    @DisplayName("Registrar cliente: datos válidos → cliente en estado ACTIVE")
     void whenRegisterCustomer_withValidData_thenSuccess() {
-        // Given
         String name = "Ana", rut = "12.345.678-9", phone = "+56987654321", email = "ana@test.com";
         CustomerEntity saved = buildCustomer(1L, name, rut, phone, email, ACTIVE);
         when(customerRepository.save(any(CustomerEntity.class))).thenReturn(saved);
 
-        // When
         CustomerEntity result = customerService.registerCustomer(name, rut, phone, email);
 
-        // Then
         assertThat(result).isNotNull();
         assertThat(result.getId()).isEqualTo(1L);
         assertThat(result.getName()).isEqualTo(name);
@@ -50,10 +50,10 @@ class CustomerServiceTest {
         verify(customerRepository).save(any(CustomerEntity.class));
     }
 
-    /* -------- NULLOS y VACÍOS -------- */
-    @ParameterizedTest
+    @ParameterizedTest(name = "name=''{0}'' → debe fallar por vacío")
     @NullSource
     @ValueSource(strings = {"", " ", "  "})
+    @DisplayName("Registrar cliente: nombre nulo o blanco → excepción")
     void whenRegisterCustomer_withNullOrBlankName_thenThrows(String name) {
         assertThatThrownBy(() -> customerService.registerCustomer(name, "rut", "phone", "mail"))
                 .isInstanceOf(RuntimeException.class)
@@ -61,58 +61,60 @@ class CustomerServiceTest {
         verifyNoInteractions(customerRepository);
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "rut=''{0}'' → debe fallar por vacío")
     @NullSource
     @ValueSource(strings = {"", " ", "  "})
+    @DisplayName("Registrar cliente: RUT nulo o blanco → excepción")
     void whenRegisterCustomer_withNullOrBlankRut_thenThrows(String rut) {
         assertThatThrownBy(() -> customerService.registerCustomer("name", rut, "phone", "mail"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("obligatorios");
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "phone=''{0}'' → debe fallar por vacío")
     @NullSource
     @ValueSource(strings = {"", " ", "  "})
+    @DisplayName("Registrar cliente: teléfono nulo o blanco → excepción")
     void whenRegisterCustomer_withNullOrBlankPhone_thenThrows(String phone) {
         assertThatThrownBy(() -> customerService.registerCustomer("name", "rut", phone, "mail"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("obligatorios");
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "email=''{0}'' → debe fallar por vacío")
     @NullSource
     @ValueSource(strings = {"", " ", "  "})
+    @DisplayName("Registrar cliente: email nulo o blanco → excepción")
     void whenRegisterCustomer_withNullOrBlankEmail_thenThrows(String email) {
         assertThatThrownBy(() -> customerService.registerCustomer("name", "rut", "phone", email))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("obligatorios");
     }
 
-    /* -------- LÍMITES EXTREMOS -------- */
     @Test
+    @DisplayName("Registrar cliente: campos extremadamente largos → guarda sin truncar")
     void whenRegisterCustomer_withMaxLongValues_thenOk() {
         int target = 265;
         String domain = "@gmail.com";
-        int domainLen = domain.length();                 // 10
-        int localPartLen = target - domainLen;           // 255
+        int domainLen = domain.length();
+        int localPartLen = target - domainLen;
 
-        String bigName   = "X".repeat(255);              // 255
-        String bigRut    = "99.999.999-9";               // 12
-        String bigPhone  = "+".repeat(50);               // 50
-        String bigEmail  = "a".repeat(localPartLen) + domain; // 255 + 10 = 265
+        String bigName = "X".repeat(255);
+        String bigRut = "99.999.999-9";
+        String bigPhone = "+".repeat(50);
+        String bigEmail = "a".repeat(localPartLen) + domain;
 
         CustomerEntity saved = buildCustomer(1L, bigName, bigRut, bigPhone, bigEmail, ACTIVE);
         when(customerRepository.save(any(CustomerEntity.class))).thenReturn(saved);
 
         CustomerEntity result = customerService.registerCustomer(bigName, bigRut, bigPhone, bigEmail);
 
-        assertThat(result.getEmail()).hasSize(265);   //  265 exactos
+        assertThat(result.getEmail()).hasSize(265);
     }
 
-    /* -------- EMAIL MAL FORMADO -------- */
     @Test
+    @DisplayName("Registrar cliente: email mal formado → se acepta (no hay validación de formato)")
     void whenRegisterCustomer_withInvalidEmailFormat_thenStillSaves() {
-        // No hay validación de formato → debe guardar
         CustomerEntity saved = buildCustomer(1L, "n", "r", "p", "invalid-email", ACTIVE);
         when(customerRepository.save(any(CustomerEntity.class))).thenReturn(saved);
 
@@ -121,26 +123,15 @@ class CustomerServiceTest {
         assertThat(result.getEmail()).isEqualTo("invalid-email");
     }
 
-    /* -------- RUT DUPLICADO (si tu repo lo valida) -------- */
-    @Test
-    void whenRegisterCustomer_withDuplicateRut_thenDependsOnRepo() {
-        /* Aquí el service NO válida duplicados; solo lo dejamos documentado
-        // Si en el futuro añades validación, des comenta:
-        // when(customerRepository.existsByRut("11.111.111-1")).thenReturn(true);
-        // assertThatThrownBy(() -> customerService.registerCustomer("n", "11.111.111-1", "p", "m"))
-        //         .isInstanceOf(RuntimeException.class)
-                   .hasMessageContaining("already exists"); */
-    }
-
-    /* ==========================
-       CHANGE STATUS
-       ========================== */
+    /* ---------------------------------------------------------- */
+    /* --------------------- CAMBIO DE ESTADO ------------------- */
+    /* ---------------------------------------------------------- */
 
     @Test
+    @DisplayName("Cambiar estado: RESTRICTED → ACTIVE")
     void whenChangeStatus_toActive_thenSuccess() {
         Long id = 1L;
-        CustomerEntity customer = buildCustomer(id, "Luis", "22.222.222-2", "phone",
-                "luis@test.com", RESTRICTED);
+        CustomerEntity customer = buildCustomer(id, "Luis", "22.222.222-2", "phone", "luis@test.com", RESTRICTED);
         when(customerRepository.findById(id)).thenReturn(Optional.of(customer));
 
         customerService.changeStatus(id, ACTIVE);
@@ -150,10 +141,10 @@ class CustomerServiceTest {
     }
 
     @Test
+    @DisplayName("Cambiar estado: ACTIVE → RESTRICTED")
     void whenChangeStatus_toRestricted_thenSuccess() {
         Long id = 1L;
-        CustomerEntity customer = buildCustomer(id, "Ana", "11.111.111-1", "phone",
-                "ana@test.com", ACTIVE);
+        CustomerEntity customer = buildCustomer(id, "Ana", "11.111.111-1", "phone", "ana@test.com", ACTIVE);
         when(customerRepository.findById(id)).thenReturn(Optional.of(customer));
 
         customerService.changeStatus(id, RESTRICTED);
@@ -163,23 +154,23 @@ class CustomerServiceTest {
     }
 
     @Test
+    @DisplayName("Cambiar estado: mismo estado → aún así persiste")
     void whenChangeStatus_sameStatus_thenStillSaves() {
         Long id = 1L;
-        CustomerEntity customer = buildCustomer(id, "Lucas", "33.333.333-3", "phone",
-                "lucas@test.com", ACTIVE);
+        CustomerEntity customer = buildCustomer(id, "Lucas", "33.333.333-3", "phone", "lucas@test.com", ACTIVE);
         when(customerRepository.findById(id)).thenReturn(Optional.of(customer));
 
-        customerService.changeStatus(id, ACTIVE); // mismo estado
+        customerService.changeStatus(id, ACTIVE);
 
         assertThat(customer.getStatus()).isEqualTo(ACTIVE);
         verify(customerRepository).save(customer);
     }
 
     @Test
+    @DisplayName("Cambiar estado: estado null → se acepta y persiste")
     void whenChangeStatus_withNullStatus_thenStillSaves() {
         Long id = 1L;
-        CustomerEntity customer = buildCustomer(id, "Marta", "44.444.444-4", "phone",
-                "marta@test.com", RESTRICTED);
+        CustomerEntity customer = buildCustomer(id, "Marta", "44.444.444-4", "phone", "marta@test.com", RESTRICTED);
         when(customerRepository.findById(id)).thenReturn(Optional.of(customer));
 
         customerService.changeStatus(id, null);
@@ -189,6 +180,7 @@ class CustomerServiceTest {
     }
 
     @Test
+    @DisplayName("Cambiar estado: ID negativo → lanza excepción por no encontrar cliente")
     void whenChangeStatus_withNegativeId_thenThrows() {
         Long id = -99L;
         when(customerRepository.findById(id)).thenReturn(Optional.empty());
@@ -199,6 +191,7 @@ class CustomerServiceTest {
     }
 
     @Test
+    @DisplayName("Cambiar estado: ID inexistente → lanza excepción")
     void whenChangeStatus_withNotFoundId_thenThrows() {
         Long id = 9999L;
         when(customerRepository.findById(id)).thenReturn(Optional.empty());
@@ -208,9 +201,12 @@ class CustomerServiceTest {
                 .hasMessageContaining("Customer not found");
     }
 
-    /*-------- GET ALL --------*/
+    /* ---------------------------------------------------------- */
+    /* --------------------- LISTADOS --------------------------- */
+    /* ---------------------------------------------------------- */
 
     @Test
+    @DisplayName("Listar todos: repositorio con datos → devuelve lista completa")
     void whenGetAllCustomers_thenReturnsList() {
         List<CustomerEntity> data = List.of(
                 buildCustomer(1L, "A", "1", "p", "a@test.com", ACTIVE),
@@ -225,6 +221,7 @@ class CustomerServiceTest {
     }
 
     @Test
+    @DisplayName("Listar todos: repositorio vacío → iterable vacío")
     void whenGetAllCustomers_emptyRepo_thenReturnsEmpty() {
         when(customerRepository.findAll()).thenReturn(List.of());
 
@@ -233,7 +230,9 @@ class CustomerServiceTest {
         assertThat(result).isEmpty();
     }
 
-    /*-------- HELPERS --------*/
+    /* ---------------------------------------------------------- */
+    /* --------------------- AUXILIARES ------------------------- */
+    /* ---------------------------------------------------------- */
 
     private CustomerEntity buildCustomer(Long id, String name, String rut, String phone, String email,
                                          CustomerStatus status) {

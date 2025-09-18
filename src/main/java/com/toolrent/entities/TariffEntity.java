@@ -1,6 +1,9 @@
 package com.toolrent.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -15,6 +18,16 @@ public class TariffEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Double dailyRentalRate = 0.0;   //Tarifa de alquiler diaria
-    private Double dailyFineRate = 0.0;     //Tarida de multa diaria
+    @OneToOne(mappedBy = "tariff")
+    @JsonIgnore
+    private ToolEntity tool;
+
+    @NotNull(message = "La tarifa de alquiler diaria no puede ser nula")
+    @Positive(message = "La tarifa de alquiler diaria debe ser mayor a 0")
+    private Double dailyRentalRate;
+
+    @NotNull(message = "La tarifa de multa diaria no puede ser nula")
+    @Positive(message = "La tarifa de multa diaria debe ser mayor a 0")
+    private Double dailyFineRate;
+
 }

@@ -25,109 +25,100 @@ class KardexMovementServiceTest {
     @InjectMocks
     private KardexMovementService kardexMovementService;
 
-    /* ---------- GET ALL MOVEMENTS ---------- */
+    /* ---------------------------------------------------------- */
+    /* --------------------- CATÁLOGO COMPLETO ------------------ */
+    /* ---------------------------------------------------------- */
 
     @Test
+    @DisplayName("Consultar todos: lista mezclada → devuelve elementos en orden del repositorio")
     void whenGetAllMovements_withMixedData_thenReturnsListInOrder() {
-        // Given
-        ToolEntity tool = buildTool(1L);
-        CustomerEntity customer = buildCustomer(10L);
+        ToolEntity tool = buildTool();
+        CustomerEntity customer = buildCustomer();
 
         KardexMovementEntity m1 = buildKardexMovement(1L, tool, customer, MovementType.LOAN,
-                LocalDateTime.now().minusDays(2), "Loan 2 units", 2);
+                LocalDateTime.now().minusDays(2), "Loan 2 units");
         KardexMovementEntity m2 = buildKardexMovement(2L, tool, customer, MovementType.RETURN,
-                LocalDateTime.now().minusDays(1), "Return 2 units", 2);
+                LocalDateTime.now().minusDays(1), "Return 2 units");
         KardexMovementEntity m3 = buildKardexMovement(3L, tool, customer, MovementType.RETIRE,
-                LocalDateTime.now(), "Retire broken", 1);
+                LocalDateTime.now(), "Retire broken");
 
         when(kardexMovementRepository.findAll()).thenReturn(List.of(m1, m2, m3));
 
-        // When
         Iterable<KardexMovementEntity> result = kardexMovementService.getAllMovements();
 
-        // Then
-        assertThat(result)
-                .hasSize(3)
-                .containsExactly(m1, m2, m3);
+        assertThat(result).hasSize(3).containsExactly(m1, m2, m3);
         verify(kardexMovementRepository).findAll();
     }
 
     @Test
+    @DisplayName("Consultar todos: sin datos → iterable vacío")
     void whenGetAllMovements_withEmptyData_thenReturnsEmptyIterable() {
-        // Given
         when(kardexMovementRepository.findAll()).thenReturn(Collections.emptyList());
 
-        // When
         Iterable<KardexMovementEntity> result = kardexMovementService.getAllMovements();
 
-        // Then
         assertThat(result).isEmpty();
         verify(kardexMovementRepository).findAll();
     }
 
     @Test
+    @DisplayName("Consultar todos: lista con nulls → maneja sin excepción")
     void whenGetAllMovements_withNullElements_thenHandlesGracefully() {
-        // Given
-        // Arrays.asList SÍ permite nulls
         when(kardexMovementRepository.findAll()).thenReturn(Arrays.asList(null, null));
 
-        // When
         Iterable<KardexMovementEntity> result = kardexMovementService.getAllMovements();
 
-        // Then
         assertThat(result).hasSize(2).containsOnlyNulls();
         verify(kardexMovementRepository).findAll();
     }
 
     @Test
+    @DisplayName("Consultar todos: 10 000 registros → no falla y mantiene tamaño")
     void whenGetAllMovements_withLargeDataset_thenDoesNotFail() {
-        // Given
-        ToolEntity tool = buildTool(1L);
-        CustomerEntity customer = buildCustomer(10L);
+        ToolEntity tool = buildTool();
+        CustomerEntity customer = buildCustomer();
 
         List<KardexMovementEntity> bigList = java.util.stream.IntStream
                 .rangeClosed(1, 10_000)
                 .mapToObj(i -> buildKardexMovement((long) i, tool, customer,
                         i % 2 == 0 ? MovementType.LOAN : MovementType.RETURN,
-                        LocalDateTime.now().minusHours(i), "Auto-generated", 1))
+                        LocalDateTime.now().minusHours(i), "Auto-generated"))
                 .toList();
 
         when(kardexMovementRepository.findAll()).thenReturn(bigList);
 
-        // When
         Iterable<KardexMovementEntity> result = kardexMovementService.getAllMovements();
 
-        // Then
         assertThat(result).hasSize(10_000);
         verify(kardexMovementRepository).findAll();
     }
 
-    /* ---------- EDGE CASES ---------- */
+    /* ---------------------------------------------------------- */
+    /* --------------------- CASOS EDGE / RAROS ----------------- */
+    /* ---------------------------------------------------------- */
 
     @Test
+    @DisplayName("Consultar todos: cubre todos los tipos de movimiento")
     void whenGetAllMovements_withAllMovementTypes_thenCoverageComplete() {
-        // Given
-        ToolEntity tool = buildTool(1L);
-        CustomerEntity customer = buildCustomer(10L);
+        ToolEntity tool = buildTool();
+        CustomerEntity customer = buildCustomer();
 
         KardexMovementEntity reg = buildKardexMovement(1L, tool, customer, MovementType.REGISTRY,
-                LocalDateTime.now().minusDays(4), "Initial registry", 10);
+                LocalDateTime.now().minusDays(4), "Initial registry");
         KardexMovementEntity loan = buildKardexMovement(2L, tool, customer, MovementType.LOAN,
-                LocalDateTime.now().minusDays(3), "Loan 3 units", 3);
+                LocalDateTime.now().minusDays(3), "Loan 3 units");
         KardexMovementEntity ret = buildKardexMovement(3L, tool, customer, MovementType.RETURN,
-                LocalDateTime.now().minusDays(2), "Return 3 units", 3);
+                LocalDateTime.now().minusDays(2), "Return 3 units");
         KardexMovementEntity retire = buildKardexMovement(4L, tool, customer, MovementType.RETIRE,
-                LocalDateTime.now().minusDays(1), "Retire damaged", 1);
+                LocalDateTime.now().minusDays(1), "Retire damaged");
         KardexMovementEntity repair = buildKardexMovement(5L, tool, customer, MovementType.REPAIR,
-                LocalDateTime.now(), "Sent to repair", 1);
+                LocalDateTime.now(), "Sent to repair");
 
         when(kardexMovementRepository.findAll())
                 .thenReturn(List.of(reg, loan, ret, retire, repair));
 
-        // When
         Iterable<KardexMovementEntity> result = kardexMovementService.getAllMovements();
 
-        // Then
         assertThat(result)
                 .hasSize(5)
                 .extracting(KardexMovementEntity::getMovementType)
@@ -139,53 +130,51 @@ class KardexMovementServiceTest {
     }
 
     @Test
+    @DisplayName("Consultar todos: details null → acepta sin problema")
     void whenGetAllMovements_withNullDetails_thenAcceptsNull() {
-        // Given
-        ToolEntity tool = buildTool(1L);
-        CustomerEntity customer = buildCustomer(10L);
+        ToolEntity tool = buildTool();
+        CustomerEntity customer = buildCustomer();
         KardexMovementEntity m = buildKardexMovement(1L, tool, customer, MovementType.REPAIR,
-                LocalDateTime.now(), null, 1);
+                LocalDateTime.now(), null);
 
         when(kardexMovementRepository.findAll()).thenReturn(List.of(m));
 
-        // When
         Iterable<KardexMovementEntity> result = kardexMovementService.getAllMovements();
 
-        // Then
         assertThat(result).hasSize(1);
         assertThat(result.iterator().next().getDetails()).isNull();
     }
 
     @Test
+    @DisplayName("Consultar todos: cantidad negativa en lógica → permitido (no valida negativos)")
     void whenGetAllMovements_withNegativeQuantity_thenAllowed() {
-        // Given
-        ToolEntity tool = buildTool(1L);
-        CustomerEntity customer = buildCustomer(10L);
+        ToolEntity tool = buildTool();
+        CustomerEntity customer = buildCustomer();
         KardexMovementEntity m = buildKardexMovement(1L, tool, customer, MovementType.RETIRE,
-                LocalDateTime.now(), "Remove defective", -5);
+                LocalDateTime.now(), "Remove defective");
 
         when(kardexMovementRepository.findAll()).thenReturn(List.of(m));
 
-        // When
         Iterable<KardexMovementEntity> result = kardexMovementService.getAllMovements();
 
-        // Then
         assertThat(result).hasSize(1);
-        assertThat(result.iterator().next().getQuantity()).isEqualTo(-5);
     }
 
-    /* ---------- HELPERS ---------- */
-    private ToolEntity buildTool(Long id) {
+    /* ---------------------------------------------------------- */
+    /* --------------------- HELPERS ---------------------------- */
+    /* ---------------------------------------------------------- */
+
+    private ToolEntity buildTool() {
         ToolEntity t = new ToolEntity();
-        t.setId(id);
-        t.setName("Tool-" + id);
+        t.setId(1L);
+        t.setName("Tool-1");
         return t;
     }
 
-    private CustomerEntity buildCustomer(Long id) {
+    private CustomerEntity buildCustomer() {
         CustomerEntity c = new CustomerEntity();
-        c.setId(id);
-        c.setName("Customer-" + id);
+        c.setId(10L);
+        c.setName("Customer-10");
         return c;
     }
 
@@ -194,8 +183,7 @@ class KardexMovementServiceTest {
                                                      CustomerEntity customer,
                                                      MovementType type,
                                                      LocalDateTime date,
-                                                     String details,
-                                                     Integer quantity) {
+                                                     String details) {
         KardexMovementEntity k = new KardexMovementEntity();
         k.setId(id);
         k.setTool(tool);
@@ -203,7 +191,6 @@ class KardexMovementServiceTest {
         k.setMovementType(type);
         k.setMovementDate(date);
         k.setDetails(details);
-        k.setQuantity(quantity);
         return k;
     }
 }

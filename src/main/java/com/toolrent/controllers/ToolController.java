@@ -87,9 +87,9 @@ public class ToolController {
     })
     public ResponseEntity<ToolEntity> updateStock(
             @PathVariable Long id,
-            @RequestParam int delta) {
+            @RequestParam int newStock) {
 
-        ToolEntity tool = toolService.updateStock(id, delta);
+        ToolEntity tool = toolService.updateStock(id, newStock);
         return ResponseEntity.ok(tool);
     }
 
@@ -104,5 +104,23 @@ public class ToolController {
     })
     public ResponseEntity<Iterable<ToolEntity>> getAllTools() {
         return ResponseEntity.ok(toolService.getAllTools());
+    }
+
+    @PatchMapping("/{id}/replacement-value")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Actualizar valor de reposición",
+            description = "Permite al administrador modificar el valor de reposición de una herramienta.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Valor actualizado"),
+            @ApiResponse(responseCode = "400", description = "Valor inválido"),
+            @ApiResponse(responseCode = "404", description = "Herramienta no encontrada"),
+            @ApiResponse(responseCode = "403", description = "No autorizado")
+    })
+    public ResponseEntity<ToolEntity> updateReplacementValue(
+            @PathVariable Long id,
+            @RequestParam Double value) {
+
+        ToolEntity updated = toolService.updateReplacementValue(id, value);
+        return ResponseEntity.ok(updated);
     }
 }
