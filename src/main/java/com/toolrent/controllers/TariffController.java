@@ -41,7 +41,7 @@ public class TariffController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     @Operation(summary = "Obtener tarifa por ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Tarifa encontrada"),
@@ -54,7 +54,7 @@ public class TariffController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     @Operation(summary = "Listar todas las tarifas")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Tarifas encontradas"),

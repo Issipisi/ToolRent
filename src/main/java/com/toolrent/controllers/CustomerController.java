@@ -12,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
+//@CrossOrigin(origins = "http://localhost:5173")
 @RequestMapping("/customers")
 @Tag(name = "Customers Controller", description = "Endpoints para Clientes")
 public class CustomerController {
@@ -53,7 +54,7 @@ public class CustomerController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     @Operation(summary = "Listar todos los clientes", description = "Retorna todos los clientes para reportes o consulta.")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Lista de clientes"),

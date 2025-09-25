@@ -95,7 +95,7 @@ public class ToolController {
 
     /* ---------- LISTADO ---------- */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     @Operation(summary = "Listar todas las herramientas",
             description = "Retorna todas las herramientas para reportes o consulta.")
     @ApiResponses(value = {

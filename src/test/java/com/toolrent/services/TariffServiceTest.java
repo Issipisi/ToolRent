@@ -129,7 +129,7 @@ class TariffServiceTest {
     }
 
 
-    /* ---------- GET ALL TARIFFS – COBERTURA FALTANTE ---------- */
+    /* ---------- GET ALL TARIFFS ---------- */
 
     @Test
     @DisplayName("getAllTariffs: lista vacía → devuelve iterable vacío")
@@ -153,7 +153,7 @@ class TariffServiceTest {
         verify(tariffRepository).findAll();
     }
 
-    /* ---------- GET BY ID – COBERTURA FALTANTE ---------- */
+    /* ---------- GET BY ID ---------- */
 
     @Test
     @DisplayName("getTariffById: encontrado → devuelve entidad")
@@ -180,7 +180,7 @@ class TariffServiceTest {
         verify(tariffRepository).findById(99L);
     }
 
-    /* ---------- UPDATE – COBERTURA FALTANTE ---------- */
+    /* ---------- UPDATE ---------- */
 
     @Test
     @DisplayName("updateTariff: crear nueva cuando no existe id=1")
@@ -196,7 +196,7 @@ class TariffServiceTest {
         verify(tariffRepository).save(any(TariffEntity.class)); // ✅ cualquier instancia
     }
 
-    /* ---------- CONCURRENCIA – COBERTURA FALTANTE ---------- */
+    /* ---------- CONCURRENCIA ---------- */
 
     @Test
     @DisplayName("getAllTariffs: 100 hilos concurrentes – sin excepciones")
