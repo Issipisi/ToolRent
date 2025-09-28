@@ -18,8 +18,8 @@ public class KardexMovementEntity {
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "tool_id", nullable = false)
-    private ToolEntity tool;
+    @JoinColumn(name = "tool_unit_id", nullable = false)
+    private ToolUnitEntity toolUnit;
 
     @ManyToOne
     @JoinColumn(name = "customer_id", nullable = false)

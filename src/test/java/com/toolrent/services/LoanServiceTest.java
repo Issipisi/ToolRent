@@ -1,10 +1,7 @@
 package com.toolrent.services;
 
 import com.toolrent.entities.*;
-import com.toolrent.repositories.CustomerRepository;
-import com.toolrent.repositories.KardexMovementRepository;
-import com.toolrent.repositories.LoanRepository;
-import com.toolrent.repositories.ToolRepository;
+import com.toolrent.repositories.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,13 +21,16 @@ class LoanServiceTest {
     private LoanRepository loanRepository;
 
     @Mock
-    private ToolRepository toolRepository;
+    private ToolGroupRepository toolGroupRepository;
 
     @Mock
-    private CustomerRepository customerRepository;
+    private ToolUnitRepository toolUnitRepository;
 
     @Mock
     private KardexMovementRepository kardexMovementRepository;
+
+    @Mock
+    private CustomerRepository customerRepository;
 
     @InjectMocks
     private LoanService loanService;
@@ -40,70 +40,64 @@ class LoanServiceTest {
     /* ---------------------------------------------------------- */
 
     @Test
-    @DisplayName("Préstamo ok: herramienta y cliente existentes, dueDate futuro, stock disminuye 1 y permanece AVAILABLE")
+    @DisplayName("Préstamo ok: grupo y cliente existentes, dueDate futuro, unidad pasa a LOANED")
     void whenRegisterLoan_withValidData_thenSuccess() {
-        Long toolId = 1L;
+        Long toolGroupId = 1L;
         Long customerId = 10L;
         LocalDateTime dueDate = LocalDateTime.now().plusDays(5);
 
-        ToolEntity tool = buildTool(toolId, "Taladro", "Eléctrica", 50000.0, 5000.0, 5, ToolStatus.AVAILABLE);
+        ToolGroupEntity group = buildToolGroup(toolGroupId, "Taladro", "Eléctrica", 50000.0, 3500.0);
+        ToolUnitEntity unit = group.getUnits().get(0);
         CustomerEntity customer = buildCustomer(customerId, "Ana", "12.345.678-9", "+56912345678", "ana@test.com");
 
-        when(toolRepository.findById(toolId)).thenReturn(Optional.of(tool));
+        when(toolGroupRepository.findById(toolGroupId)).thenReturn(Optional.of(group));
+        when(toolUnitRepository.findFirstByToolGroupIdAndStatus(toolGroupId, ToolStatus.AVAILABLE))
+                .thenReturn(Optional.of(unit));
         when(customerRepository.findById(customerId)).thenReturn(Optional.of(customer));
         when(loanRepository.save(any(LoanEntity.class))).thenAnswer(i -> i.getArgument(0));
 
-        LoanEntity result = loanService.registerLoan(toolId, customerId, dueDate);
+        LoanEntity result = loanService.registerLoan(toolGroupId, customerId, dueDate);
 
         assertThat(result).isNotNull();
-        assertThat(result.getTool()).isEqualTo(tool);
+        assertThat(result.getToolUnit()).isEqualTo(unit);
         assertThat(result.getCustomer()).isEqualTo(customer);
         assertThat(result.getDueDate()).isEqualTo(dueDate);
-        assertThat(tool.getStock()).isEqualTo(4);
-        assertThat(tool.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
+        assertThat(unit.getStatus()).isEqualTo(ToolStatus.LOANED);
 
-        verify(toolRepository).save(tool);
+        verify(toolUnitRepository).save(unit);
         verify(kardexMovementRepository).save(any(KardexMovementEntity.class));
     }
 
     @Test
-    @DisplayName("Última unidad en stock: al prestarla el estado pasa a LOANED")
-    void whenRegisterLoan_andLastUnit_thenToolStatusIsLoaned() {
-        Long toolId = 1L;
-        ToolEntity tool = buildTool(toolId, "A", "B", 100.0, 10.0, 1, ToolStatus.AVAILABLE);
-        CustomerEntity customer = buildCustomer(10L, "Luis", "11.111.111-1", "+56911111111", "luis@test.com");
+    @DisplayName("No hay unidades disponibles → excepción")
+    void whenRegisterLoan_noAvailableUnit_thenThrows() {
+        Long toolGroupId = 1L;
+        ToolGroupEntity group = buildToolGroup(toolGroupId, "A", "B", 1000.0, 0);
 
-        when(toolRepository.findById(toolId)).thenReturn(Optional.of(tool));
-        when(customerRepository.findById(10L)).thenReturn(Optional.of(customer));
-        when(loanRepository.save(any(LoanEntity.class))).thenAnswer(i -> i.getArgument(0));
+        when(toolGroupRepository.findById(toolGroupId)).thenReturn(Optional.of(group));
+        when(toolUnitRepository.findFirstByToolGroupIdAndStatus(toolGroupId, ToolStatus.AVAILABLE))
+                .thenReturn(Optional.empty());
 
-        loanService.registerLoan(toolId, 10L, LocalDateTime.now().plusDays(2));
-
-        assertThat(tool.getStock()).isZero();
-        assertThat(tool.getStatus()).isEqualTo(ToolStatus.LOANED);
-    }
-
-    @Test
-    @DisplayName("Herramienta no disponible (stock 0 o estado LOANED) → excepción")
-    void whenRegisterLoan_withToolNotAvailable_thenThrows() {
-        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 0, ToolStatus.LOANED);
-        when(toolRepository.findById(1L)).thenReturn(Optional.of(tool));
-
-        assertThatThrownBy(() -> loanService.registerLoan(1L, 10L, LocalDateTime.now().plusDays(2)))
+        assertThatThrownBy(() -> loanService.registerLoan(toolGroupId, 10L, LocalDateTime.now().plusDays(2)))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Tool not available for loan");
+                .hasMessageContaining("No hay unidades disponibles");
 
         verifyNoInteractions(loanRepository, kardexMovementRepository);
     }
 
     @Test
-    @DisplayName("Cliente inexistente → excepción sin tocar base")
-    void whenRegisterLoan_withCustomerNotFound_thenThrows() {
-        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 1, ToolStatus.AVAILABLE);
-        when(toolRepository.findById(1L)).thenReturn(Optional.of(tool));
+    @DisplayName("Cliente inexistente → excepción")
+    void whenRegisterLoan_customerNotFound_thenThrows() {
+        Long toolGroupId = 1L;
+        ToolGroupEntity group = buildToolGroup(toolGroupId, "A", "B", 1000.0, 1);
+        ToolUnitEntity unit = group.getUnits().get(0);
+
+        when(toolGroupRepository.findById(toolGroupId)).thenReturn(Optional.of(group));
+        when(toolUnitRepository.findFirstByToolGroupIdAndStatus(toolGroupId, ToolStatus.AVAILABLE))
+                .thenReturn(Optional.of(unit));
         when(customerRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> loanService.registerLoan(1L, 99L, LocalDateTime.now().plusDays(2)))
+        assertThatThrownBy(() -> loanService.registerLoan(toolGroupId, 99L, LocalDateTime.now().plusDays(2)))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Customer not found");
 
@@ -111,32 +105,23 @@ class LoanServiceTest {
     }
 
     @Test
-    @DisplayName("Herramienta inexistente → excepción")
-    void whenRegisterLoan_withToolNotFound_thenThrows() {
-        when(toolRepository.findById(999L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> loanService.registerLoan(999L, 10L, LocalDateTime.now().plusDays(2)))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Tool not found");
-
-        verifyNoInteractions(loanRepository, kardexMovementRepository);
-    }
-
-    @Test
-    @DisplayName("DueDate en el pasado: se cobra 1 día (mínimo forzado)")
-    void whenRegisterLoan_withDueDateBeforeNow_thenCalculatesOneDay() {
-        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 1, ToolStatus.AVAILABLE);
+    @DisplayName("DueDate en el pasado → calcula 1 día mínimo")
+    void whenRegisterLoan_pastDueDate_thenCalculatesOneDay() {
+        Long toolGroupId = 1L;
+        ToolGroupEntity group = buildToolGroup(toolGroupId, "A", "B", 100.0, 100.0); // ✅ 100.0
+        ToolUnitEntity unit = group.getUnits().get(0);
         CustomerEntity customer = buildCustomer(10L, "Ana", "11.111.111-1", "+56911111111", "ana@test.com");
         LocalDateTime dueDate = LocalDateTime.now().minusDays(2);
 
-        when(toolRepository.findById(1L)).thenReturn(Optional.of(tool));
+        when(toolGroupRepository.findById(toolGroupId)).thenReturn(Optional.of(group));
+        when(toolUnitRepository.findFirstByToolGroupIdAndStatus(toolGroupId, ToolStatus.AVAILABLE))
+                .thenReturn(Optional.of(unit));
         when(customerRepository.findById(10L)).thenReturn(Optional.of(customer));
         when(loanRepository.save(any(LoanEntity.class))).thenAnswer(i -> i.getArgument(0));
 
-        LoanEntity result = loanService.registerLoan(1L, 10L, dueDate);
+        LoanEntity result = loanService.registerLoan(toolGroupId, 10L, dueDate);
 
-        assertThat(result.getTotalCost()).isEqualTo(10.0);
-        verify(kardexMovementRepository).save(any(KardexMovementEntity.class));
+        assertThat(result.getTotalCost()).isEqualTo(100.0); //  1 día × 100.0
     }
 
     /* ---------------------------------------------------------- */
@@ -144,84 +129,92 @@ class LoanServiceTest {
     /* ---------------------------------------------------------- */
 
     @Test
-    @DisplayName("Devolución puntual: stock +1, sin multa, estado AVAILABLE")
+    @DisplayName("Devolución puntual: unidad pasa a AVAILABLE, sin multa")
     void whenReturnLoan_onTime_thenSuccess() {
         Long loanId = 1L;
         LocalDateTime dueDate = LocalDateTime.now().plusDays(5);
 
-        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 0, ToolStatus.LOANED);
+        ToolGroupEntity group = buildToolGroup(1L, "A", "B", 100.0, 1);
+        ToolUnitEntity unit = group.getUnits().get(0);
+        unit.setStatus(ToolStatus.LOANED);
         CustomerEntity customer = buildCustomer(10L, "Luis", "22.222.222-2", "+56987654321", "luis@test.com");
-        LoanEntity loan = buildLoan(loanId, customer, tool, dueDate);
+        LoanEntity loan = buildLoan(loanId, customer, unit, dueDate);
 
         when(loanRepository.findById(loanId)).thenReturn(Optional.of(loan));
 
         loanService.returnLoan(loanId);
 
-        assertThat(tool.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
-        assertThat(tool.getStock()).isEqualTo(1);
+        assertThat(unit.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
         assertThat(loan.getReturnDate()).isNotNull();
         assertThat(loan.getFineAmount()).isZero();
 
-        verify(toolRepository).save(tool);
+        verify(toolUnitRepository).save(unit);
         verify(loanRepository).save(loan);
         verify(kardexMovementRepository).save(any(KardexMovementEntity.class));
     }
 
     @Test
-    @DisplayName("Devolución atrasada: calcula multa 3 días × 1000 y actualiza stock")
+    @DisplayName("Devolución atrasada: calcula multa")
     void whenReturnLoan_withDelay_thenAppliesFine() {
         Long loanId = 1L;
         LocalDateTime dueDate = LocalDateTime.now().minusDays(3);
 
-        ToolEntity tool = buildTool(1L, "A", "C", 100.0, 10.0, 0, ToolStatus.LOANED);
-        CustomerEntity customer = buildCustomer(10L, "Ana", "11.111.111-1", "+56911111111", "ana@test.com");
-        LoanEntity loan = buildLoan(loanId, customer, tool, dueDate);
+        ToolGroupEntity group = buildToolGroup(1L, "A", "B", 100.0, 1000.0);
+        ToolUnitEntity unit = group.getUnits().get(0);
+        unit.setStatus(ToolStatus.LOANED);
+        CustomerEntity customer = buildCustomer(10L, "Ana", "11.111.111-1", "+56911111111",
+                "ana@test.com");
+        LoanEntity loan = buildLoan(loanId, customer, unit, dueDate);
 
         when(loanRepository.findById(loanId)).thenReturn(Optional.of(loan));
 
         loanService.returnLoan(loanId);
 
-        assertThat(tool.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
-        assertThat(tool.getStock()).isEqualTo(1);
+        assertThat(unit.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
         assertThat(loan.getReturnDate()).isNotNull();
-        assertThat(loan.getFineAmount()).isEqualTo(3000.0);
+        assertThat(loan.getFineAmount()).isEqualTo(6000.0);
 
-        verify(toolRepository).save(tool);
+        verify(toolUnitRepository).save(unit);
         verify(loanRepository).save(loan);
         verify(kardexMovementRepository).save(any(KardexMovementEntity.class));
     }
 
     @Test
     @DisplayName("Préstamo inexistente → excepción")
-    void whenReturnLoan_withLoanNotFound_thenThrows() {
-        Long loanId = 999L;
-        when(loanRepository.findById(loanId)).thenReturn(Optional.empty());
+    void whenReturnLoan_loanNotFound_thenThrows() {
+        when(loanRepository.findById(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> loanService.returnLoan(loanId))
+        assertThatThrownBy(() -> loanService.returnLoan(999L))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Loan not found");
 
-        verifyNoInteractions(toolRepository, kardexMovementRepository);
+        verifyNoInteractions(toolUnitRepository, kardexMovementRepository);
     }
 
     /* ---------------------------------------------------------- */
     /* --------------------- HELPERS ---------------------------- */
     /* ---------------------------------------------------------- */
 
-    private ToolEntity buildTool(Long id, String name, String category,
-                                 Double replacementValue, Double pricePerDay,
-                                 Integer stock, ToolStatus status) {
-        ToolEntity tool = new ToolEntity();
-        tool.setId(id);
-        tool.setName(name);
-        tool.setCategory(category);
-        tool.setReplacementValue(replacementValue);
-        tool.setPricePerDay(pricePerDay);
-        tool.setStock(stock);
-        tool.setStatus(status);
-        TariffEntity tariff = buildTariff(pricePerDay, pricePerDay * 100);
-        tool.setTariff(tariff);
-        return tool;
+    private ToolGroupEntity buildToolGroup(Long id, String name, String category, double replacementValue, double dailyRate) {
+        ToolGroupEntity group = new ToolGroupEntity();
+        group.setId(id);
+        group.setName(name);
+        group.setCategory(category);
+        group.setReplacementValue(replacementValue);
+
+        TariffEntity tariff = new TariffEntity();
+        tariff.setDailyRentalRate(dailyRate);
+        tariff.setDailyFineRate(dailyRate * 2);
+        group.setTariff(tariff);
+
+        for (int i = 0; i < 3; i++) {
+            ToolUnitEntity unit = new ToolUnitEntity();
+            unit.setId((long) (i + 1));
+            unit.setStatus(ToolStatus.AVAILABLE);
+            unit.setToolGroup(group);
+            group.getUnits().add(unit);
+        }
+        return group;
     }
 
     private CustomerEntity buildCustomer(Long id, String name, String rut, String phone, String email) {
@@ -235,22 +228,15 @@ class LoanServiceTest {
         return c;
     }
 
-    private LoanEntity buildLoan(Long id, CustomerEntity customer, ToolEntity tool, LocalDateTime dueDate) {
+    private LoanEntity buildLoan(Long id, CustomerEntity customer, ToolUnitEntity unit, LocalDateTime dueDate) {
         LoanEntity l = new LoanEntity();
         l.setId(id);
         l.setCustomer(customer);
-        l.setTool(tool);
+        l.setToolUnit(unit);
         l.setDueDate(dueDate);
         l.setReturnDate(null);
         l.setTotalCost(0.0);
         l.setFineAmount(0.0);
         return l;
-    }
-
-    private TariffEntity buildTariff(Double dailyRentalRate, Double dailyFineRate) {
-        TariffEntity t = new TariffEntity();
-        t.setDailyRentalRate(dailyRentalRate);
-        t.setDailyFineRate(dailyFineRate);
-        return t;
     }
 }

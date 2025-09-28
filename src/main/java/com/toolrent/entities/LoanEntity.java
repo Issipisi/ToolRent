@@ -22,8 +22,8 @@ public class LoanEntity {
     private CustomerEntity customer;
 
     @ManyToOne
-    @JoinColumn(name = "tool_id", nullable = false)
-    private ToolEntity tool;
+    @JoinColumn(name = "tool_unit_id", nullable = false)
+    private ToolUnitEntity toolUnit;
 
     @Column(nullable = false)
     private LocalDateTime loanDate = LocalDateTime.now();

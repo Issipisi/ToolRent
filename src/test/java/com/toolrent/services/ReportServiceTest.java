@@ -1,10 +1,10 @@
 package com.toolrent.services;
 
-import com.toolrent.config.ToolCountDTO;
 import com.toolrent.entities.*;
+import com.toolrent.repositories.KardexMovementRepository;
 import com.toolrent.repositories.LoanRepository;
 import com.toolrent.repositories.CustomerRepository;
-import com.toolrent.repositories.ToolRepository;
+import com.toolrent.repositories.ToolUnitRepository;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -13,6 +13,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,15 +34,20 @@ class ReportServiceTest {
     private CustomerRepository customerRepository;
 
     @Mock
-    private ToolRepository toolRepository;
+    private ToolUnitRepository toolUnitRepository;
+
+    @Mock
+    private KardexMovementRepository kardexMovementRepository;
 
     @InjectMocks
     private ReportService reportService;
 
+    @InjectMocks
+    private LoanService loanService;
+
     /* Fechas fijas reproducibles */
     private static final LocalDateTime D1  = LocalDateTime.of(2025, 9, 1, 0, 0);
     private static final LocalDateTime D5  = LocalDateTime.of(2025, 9, 5, 0, 0);
-    private static final LocalDateTime D10 = LocalDateTime.of(2025, 9, 10, 0, 0);
     private static final LocalDateTime D15 = LocalDateTime.of(2025, 9, 15, 0, 0);
     private static final LocalDateTime D20 = LocalDateTime.of(2025, 9, 20, 0, 0);
 
@@ -67,20 +74,35 @@ class ReportServiceTest {
     }
 
     @Test
-    @DisplayName("Préstamo justo en límite inferior debe incluirse")
-    void whenLoanAtFromBoundary_thenIncluded() {
-        ToolEntity tool = buildTool(1L, "T");
+    @DisplayName("Devolución atrasada: calcula multa")
+    void whenReturnLoan_withDelay_thenAppliesFine() {
+        Long loanId = 1L;
+        LocalDateTime dueDate = LocalDateTime.now().minusDays(3);
+
+        ToolGroupEntity group = buildToolGroup();
+
+        // Crea y añade una unidad manualmente
+        ToolUnitEntity unit = new ToolUnitEntity();
+        unit.setId(1L);
+        unit.setStatus(ToolStatus.LOANED);
+        unit.setToolGroup(group);
+        group.getUnits().add(unit);
+
         CustomerEntity customer = buildCustomer("Ana");
-        LoanEntity loan = buildLoan(customer, tool);
+        LoanEntity loan = buildLoan(customer, unit);
+        loan.setDueDate(dueDate);
 
-        when(loanRepository.findActiveLoansInRange(D5, D10))
-                .thenReturn(List.of(loan));
+        when(loanRepository.findById(loanId)).thenReturn(Optional.of(loan));
 
-        List<LoanEntity> result = reportService.getActiveLoans(D5, D10);
+        loanService.returnLoan(loanId);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getId()).isEqualTo(1L);
-        verify(loanRepository).findActiveLoansInRange(D5, D10);
+        assertThat(unit.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
+        assertThat(loan.getReturnDate()).isNotNull();
+        assertThat(loan.getFineAmount()).isEqualTo(600.0);
+
+        verify(toolUnitRepository).save(unit);
+        verify(loanRepository).save(loan);
+        verify(kardexMovementRepository).save(any(KardexMovementEntity.class));
     }
 
     /* ---------- RF6.2 Casos límite ---------- */
@@ -115,37 +137,59 @@ class ReportServiceTest {
     @Test
     @DisplayName("Rango sin préstamos debe devolver lista vacía")
     void whenTopToolsRangeEmpty_thenEmpty() {
-        when(toolRepository.findTopLoanedTools(D20, D20.plusDays(1)))
+        when(loanRepository.countLoansByToolGroupInRange(D20, D20.plusDays(1)))
                 .thenReturn(List.of());
 
         assertThat(reportService.getTopTools(D20, D20.plusDays(1))).isEmpty();
-        verify(toolRepository).findTopLoanedTools(D20, D20.plusDays(1));
+        verify(loanRepository).countLoansByToolGroupInRange(D20, D20.plusDays(1));
     }
 
     @Test
     @DisplayName("Empate en cantidad debe mantener orden descendente")
     void whenTopToolsTie_thenOrderConserved() {
-        ToolEntity t1 = buildTool(1L, "A");
-        ToolEntity t2 = buildTool(2L, "B");
+        Map<String, Object> row1 = Map.of(
+                "toolGroupId", 1L,
+                "toolGroupName", "A",
+                "total", 5L
+        );
+        Map<String, Object> row2 = Map.of(
+                "toolGroupId", 2L,
+                "toolGroupName", "B",
+                "total", 5L
+        );
 
-        ToolCountDTO dto1 = new ToolCountDTO() {
-            @Override public ToolEntity getTool() { return t1; }
-            @Override public Long getTotal() { return 2L; }
-        };
+        when(loanRepository.countLoansByToolGroupInRange(D1, D20))
+                .thenReturn(List.of(row1, row2));
 
-        ToolCountDTO dto2 = new ToolCountDTO() {
-            @Override public ToolEntity getTool() { return t2; }
-            @Override public Long getTotal() { return 2L; }
-        };
-
-        when(toolRepository.findTopLoanedTools(D1, D20))
-                .thenReturn(List.of(dto1, dto2)); // simula empate 2-2
-
-        List<ToolCountDTO> ranking = reportService.getTopTools(D1, D20);
+        List<Map<String, Object>> ranking = reportService.getTopTools(D1, D20);
 
         assertThat(ranking).hasSize(2);
-        assertThat(ranking.get(0).getTool().getName()).isEqualTo("A");
-        assertThat(ranking.get(1).getTool().getName()).isEqualTo("B");
+        assertThat(ranking.get(0).get("toolGroupId")).isEqualTo(1L);
+        assertThat(ranking.get(1).get("toolGroupId")).isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("Ranking con valores extremos (total = 0 y total = 999999)")
+    void whenTopTools_withExtremeTotals_thenAccepted() {
+        Map<String, Object> row1 = Map.of(
+                "toolGroupId", 1L,
+                "toolGroupName", "Zero",
+                "total", 0L
+        );
+        Map<String, Object> row2 = Map.of(
+                "toolGroupId", 2L,
+                "toolGroupName", "Huge",
+                "total", 999_999L
+        );
+
+        when(loanRepository.countLoansByToolGroupInRange(D1, D20))
+                .thenReturn(List.of(row1, row2));
+
+        List<Map<String, Object>> ranking = reportService.getTopTools(D1, D20);
+
+        assertThat(ranking).hasSize(2);
+        assertThat(ranking.get(0).get("total")).isEqualTo(0L);
+        assertThat(ranking.get(1).get("total")).isEqualTo(999_999L);
     }
 
     /* ---------- CONCURRENCIA ---------- */
@@ -180,21 +224,18 @@ class ReportServiceTest {
     }
 
     /* ---------- Helpers ---------- */
-    private ToolEntity buildTool(Long id, String name) {
+    private ToolGroupEntity buildToolGroup() {
         TariffEntity tariff = new TariffEntity();
         tariff.setDailyRentalRate(100.0);
-        tariff.setDailyFineRate(100.0);
+        tariff.setDailyFineRate(100.0 * 2);
 
-        ToolEntity t = new ToolEntity();
-        t.setId(id);
-        t.setName(name);
-        t.setCategory("C");
-        t.setReplacementValue(1000.0);
-        t.setPricePerDay(100.0);
-        t.setStock(10);
-        t.setStatus(ToolStatus.AVAILABLE);
-        t.setTariff(tariff);
-        return t;
+        ToolGroupEntity g = new ToolGroupEntity();
+        g.setId(1L);
+        g.setName("T");
+        g.setCategory("C");
+        g.setReplacementValue(1000.0);
+        g.setTariff(tariff);
+        return g;
     }
 
     private CustomerEntity buildCustomer(String name) {
@@ -208,13 +249,13 @@ class ReportServiceTest {
         return c;
     }
 
-    private LoanEntity buildLoan(CustomerEntity c, ToolEntity t) {
+    private LoanEntity buildLoan(CustomerEntity c, ToolUnitEntity unit) {
         LoanEntity l = new LoanEntity();
         l.setId(1L);
         l.setCustomer(c);
-        l.setTool(t);
-        l.setLoanDate(ReportServiceTest.D5);
-        l.setDueDate(ReportServiceTest.D15);
+        l.setToolUnit(unit);
+        l.setLoanDate(D5);
+        l.setDueDate(D15);
         l.setReturnDate(null);
         l.setTotalCost(100.0);
         l.setFineAmount(0.0);

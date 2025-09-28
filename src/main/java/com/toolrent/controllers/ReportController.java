@@ -1,6 +1,5 @@
 package com.toolrent.controllers;
 
-import com.toolrent.config.ToolCountDTO;
 import com.toolrent.entities.LoanEntity;
 import com.toolrent.entities.CustomerEntity;
 import com.toolrent.services.ReportService;
@@ -15,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/reports")
@@ -52,7 +52,7 @@ public class ReportController {
 
     @GetMapping("/top-tools")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
-    public ResponseEntity<List<ToolCountDTO>> getTopTools(
+    public ResponseEntity<List<Map<String, Object>>> getTopTools(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
         return ResponseEntity.ok(reportService.getTopTools(from, to));

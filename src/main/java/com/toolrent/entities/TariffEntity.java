@@ -20,7 +20,7 @@ public class TariffEntity {
 
     @OneToOne(mappedBy = "tariff")
     @JsonIgnore
-    private ToolEntity tool;
+    private ToolGroupEntity tool_group;
 
     @NotNull(message = "La tarifa de alquiler diaria no puede ser nula")
     @Positive(message = "La tarifa de alquiler diaria debe ser mayor a 0")
