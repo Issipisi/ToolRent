@@ -1,6 +1,7 @@
 package com.toolrent.repositories;
 
 import com.toolrent.entities.CustomerEntity;
+import com.toolrent.entities.CustomerStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,4 +20,5 @@ public interface CustomerRepository extends JpaRepository<CustomerEntity, Long> 
             "WHERE l.returnDate IS NULL AND l.dueDate < :now")
     List<CustomerEntity> findCustomersWithOverdueLoans(@Param("now") LocalDateTime now);
 
+    List<CustomerEntity> findByStatus(CustomerStatus status);
 }

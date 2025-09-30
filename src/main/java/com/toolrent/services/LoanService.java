@@ -1,5 +1,6 @@
 package com.toolrent.services;
 
+import com.toolrent.config.LoanActiveDTO;
 import com.toolrent.config.SecurityConfig;
 import com.toolrent.entities.*;
 import com.toolrent.repositories.*;
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 @Service
 public class LoanService {
@@ -16,6 +18,7 @@ public class LoanService {
     private final ToolUnitRepository toolUnitRepository;
     private final KardexMovementRepository kardexMovementRepository;
     private final CustomerRepository customerRepository;
+
 
     public LoanService(LoanRepository loanRepository,
                        ToolGroupRepository toolGroupRepository,
@@ -95,5 +98,9 @@ public class LoanService {
         long days = ChronoUnit.DAYS.between(LocalDateTime.now(), dueDate);
         days = Math.max(1, days);
         return toolGroup.getTariff().getDailyRentalRate() * days;
+    }
+
+    public List<LoanActiveDTO> getActiveLoans(LocalDateTime from, LocalDateTime to) {
+        return loanRepository.findActiveLoansInRange(from, to);
     }
 }

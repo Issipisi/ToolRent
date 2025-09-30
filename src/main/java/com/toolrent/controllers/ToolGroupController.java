@@ -8,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/tools")
 @Tag(name = "Tool Group Controller", description = "Gestión de grupos de herramientas")
@@ -38,5 +40,12 @@ public class ToolGroupController {
     @Operation(summary = "Listar todos los grupos")
     public ResponseEntity<Iterable<ToolGroupEntity>> getAllToolGroups() {
         return ResponseEntity.ok(toolGroupService.getAllToolGroups());
+    }
+
+    @GetMapping("/available")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @Operation(summary = "Listar grupos con unidades disponibles")
+    public ResponseEntity<List<ToolGroupEntity>> getAvailableToolGroups() {
+        return ResponseEntity.ok(toolGroupService.getToolGroupsWithAvailableUnits());
     }
 }

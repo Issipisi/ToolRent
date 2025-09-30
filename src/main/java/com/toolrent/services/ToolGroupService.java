@@ -5,6 +5,8 @@ import com.toolrent.entities.*;
 import com.toolrent.repositories.*;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class ToolGroupService {
 
@@ -87,6 +89,13 @@ public class ToolGroupService {
 
     public Iterable<ToolGroupEntity> getAllToolGroups() {
         return toolGroupRepository.findAll();
+    }
+
+    public List<ToolGroupEntity> getToolGroupsWithAvailableUnits() {
+        return toolGroupRepository.findAll().stream()
+                .filter(g -> g.getUnits().stream().anyMatch(u -> u.getStatus() ==
+                        ToolStatus.AVAILABLE))
+                .toList();
     }
 
 

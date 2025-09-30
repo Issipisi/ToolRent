@@ -1,5 +1,6 @@
 package com.toolrent.repositories;
 
+import com.toolrent.config.LoanActiveDTO;
 import com.toolrent.entities.LoanEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -18,8 +19,29 @@ public interface LoanRepository extends JpaRepository<LoanEntity, Long> {
             "WHERE l.returnDate IS NULL " +
             "AND l.loanDate BETWEEN :from AND :to " +
             "ORDER BY l.dueDate ASC")
-    List<LoanEntity> findActiveLoansInRange(@Param("from") LocalDateTime from,
+    List<LoanEntity> findActiveLoansInRangeReport(@Param("from") LocalDateTime from,
                                             @Param("to") LocalDateTime to);
+
+
+    //Query para mostrar los préstamos activos en el front
+    @Query("""
+    SELECT new com.toolrent.config.LoanActiveDTO(
+           l.id,
+           c.name,
+           tg.name,
+           l.loanDate,
+           l.dueDate,
+           l.returnDate)
+    FROM LoanEntity l
+    JOIN l.customer c
+    JOIN l.toolUnit tu
+    JOIN tu.toolGroup tg
+    WHERE l.returnDate IS NULL
+      AND l.loanDate BETWEEN :from AND :to
+    ORDER BY l.dueDate ASC
+""")
+    List<LoanActiveDTO> findActiveLoansInRange(@Param("from") LocalDateTime from,
+                                               @Param("to") LocalDateTime to);
 
     // Ranking de grupos más prestados en un rango de fechas
     @Query(value = """

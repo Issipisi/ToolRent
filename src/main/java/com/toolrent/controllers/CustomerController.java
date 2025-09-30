@@ -11,6 +11,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 //@CrossOrigin(origins = "http://localhost:5173")
 @RequestMapping("/customers")
@@ -62,5 +64,13 @@ public class CustomerController {
     })
     public ResponseEntity<Iterable<CustomerEntity>> getAllCustomers() {
         return ResponseEntity.ok(customerService.getAllCustomers());
+    }
+
+
+    @GetMapping("/active")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    @Operation(summary = "Listar clientes activos")
+    public ResponseEntity<List<CustomerEntity>> getActiveCustomers() {
+        return ResponseEntity.ok(customerService.getCustomersByStatus(CustomerStatus.ACTIVE));
     }
 }

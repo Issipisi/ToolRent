@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -28,15 +28,23 @@ public class ReportController {
     }
 
     @GetMapping("/active-loans")
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
-    @Operation(summary = "Listar préstamos activos y su estado", description = "Retorna préstamos vigentes o atrasados" +
-            " con filtro por fechas.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Lista de préstamos"),
-            @ApiResponse(responseCode = "403", description = "No autorizado")
-    })
-    public ResponseEntity<List<LoanEntity>> getActiveLoans(@RequestParam LocalDateTime from, @RequestParam LocalDateTime to) {
-        return ResponseEntity.ok(reportService.getActiveLoans(from, to));
+    public ResponseEntity<List<LoanEntity>> getActiveLoans(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+
+        if (from == null) from = LocalDate.now().minusMonths(1);
+        if (to == null)   to = LocalDate.now();
+        return ResponseEntity.ok(reportService.getActiveLoans(from.atStartOfDay(), to.plusDays(1).atStartOfDay()));
+    }
+
+    @GetMapping("/top-tools")
+    public ResponseEntity<List<Map<String, Object>>> getTopTools(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+
+        if (from == null) from = LocalDate.now().minusMonths(1);
+        if (to == null)   to = LocalDate.now();
+        return ResponseEntity.ok(reportService.getTopTools(from.atStartOfDay(), to.plusDays(1).atStartOfDay()));
     }
 
     @GetMapping("/overdue-customers")
@@ -48,13 +56,5 @@ public class ReportController {
     })
     public ResponseEntity<List<CustomerEntity>> getOverdueCustomers() {
         return ResponseEntity.ok(reportService.getOverdueCustomers());
-    }
-
-    @GetMapping("/top-tools")
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
-    public ResponseEntity<List<Map<String, Object>>> getTopTools(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
-        return ResponseEntity.ok(reportService.getTopTools(from, to));
     }
 }

@@ -9,5 +9,6 @@ import java.util.Optional;
 
 public interface ToolUnitRepository extends JpaRepository<ToolUnitEntity, Long> {
     Optional<ToolUnitEntity> findFirstByToolGroupIdAndStatus(Long toolGroupId, ToolStatus status);
+
     List<ToolUnitEntity> findAllByToolGroupIdAndStatus(Long toolGroupId, ToolStatus status);
 }

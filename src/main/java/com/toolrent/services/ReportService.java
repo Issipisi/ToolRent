@@ -24,7 +24,7 @@ public class ReportService {
 
     /* RF6.1 Préstamos activos (sin devolver) en rango de loanDate */
     public List<LoanEntity> getActiveLoans(LocalDateTime from, LocalDateTime to) {
-        return loanRepository.findActiveLoansInRange(from, to);
+        return loanRepository.findActiveLoansInRangeReport(from, to);
     }
 
     /* RF6.2 Clientes con al menos un préstamo atrasado */

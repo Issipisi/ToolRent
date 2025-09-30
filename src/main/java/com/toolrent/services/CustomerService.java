@@ -5,6 +5,8 @@ import com.toolrent.entities.CustomerStatus;
 import com.toolrent.repositories.CustomerRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class CustomerService {
 
@@ -41,5 +43,9 @@ public class CustomerService {
 
     public Iterable<CustomerEntity> getAllCustomers() {
         return customerRepository.findAll();
+    }
+
+    public List<CustomerEntity> getCustomersByStatus(CustomerStatus status) {
+        return customerRepository.findByStatus(status);
     }
 }
