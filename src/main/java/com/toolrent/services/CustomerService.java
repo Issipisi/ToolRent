@@ -48,4 +48,18 @@ public class CustomerService {
     public List<CustomerEntity> getCustomersByStatus(CustomerStatus status) {
         return customerRepository.findByStatus(status);
     }
+
+    public CustomerEntity getSystemCustomer() {
+
+        return customerRepository.findByEmail("system@toolrent.com")
+                .orElseGet(() -> {
+                    CustomerEntity sys = new CustomerEntity();
+                    sys.setName("Sistema");
+                    sys.setRut("0-0");
+                    sys.setEmail("system@toolrent.com");
+                    sys.setPhone("000");
+                    sys.setStatus(CustomerStatus.ACTIVE);
+                    return customerRepository.save(sys);
+                });
+    }
 }

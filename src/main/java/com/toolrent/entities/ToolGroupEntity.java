@@ -33,5 +33,4 @@ public class ToolGroupEntity {
     @OneToMany(mappedBy = "toolGroup", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ToolUnitEntity> units = new ArrayList<>();
-
 }

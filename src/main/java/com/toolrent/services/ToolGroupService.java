@@ -12,14 +12,17 @@ public class ToolGroupService {
 
     private final ToolGroupRepository toolGroupRepository;
     private final KardexMovementRepository kardexMovementRepository;
-    private final CustomerRepository customerRepository;
+    private final CustomerService customerService;
+    private final ToolUnitRepository toolUnitRepository;
 
     public ToolGroupService(ToolGroupRepository toolGroupRepository,
                             KardexMovementRepository kardexMovementRepository,
-                            CustomerRepository customerRepository) {
+                            CustomerService customerService,
+                            ToolUnitRepository toolUnitRepository) {
         this.toolGroupRepository = toolGroupRepository;
         this.kardexMovementRepository = kardexMovementRepository;
-        this.customerRepository = customerRepository;
+        this.customerService = customerService;
+        this.toolUnitRepository = toolUnitRepository;
     }
 
     /* Crear grupo + unidades */
@@ -61,10 +64,9 @@ public class ToolGroupService {
 
     private void saveRegistryKardex(ToolGroupEntity group, int stock) {
         if (stock == 0) return;
-        CustomerEntity systemCustomer = getSystemCustomer();
         KardexMovementEntity movement = new KardexMovementEntity();
+        movement.setCustomer(customerService.getSystemCustomer());
         movement.setToolUnit(group.getUnits().get(0));
-        movement.setCustomer(systemCustomer);
         movement.setMovementType(MovementType.REGISTRY);
         movement.setDetails("Creación de grupo: " + group.getName() +
                 " - Stock inicial: " + stock +
@@ -73,19 +75,7 @@ public class ToolGroupService {
     }
 
 
-    private CustomerEntity getSystemCustomer() {
 
-        return customerRepository.findByEmail("system@toolrent.com")
-                .orElseGet(() -> {
-                    CustomerEntity sys = new CustomerEntity();
-                    sys.setName("Sistema");
-                    sys.setRut("0-0");
-                    sys.setEmail("system@toolrent.com");
-                    sys.setPhone("000");
-                    sys.setStatus(CustomerStatus.ACTIVE);
-                    return customerRepository.save(sys);
-                });
-    }
 
     public Iterable<ToolGroupEntity> getAllToolGroups() {
         return toolGroupRepository.findAll();
@@ -98,5 +88,24 @@ public class ToolGroupService {
                 .toList();
     }
 
+    public ToolGroupEntity findById(Long id) {
+        return toolGroupRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("ToolGroup not found"));
+    }
 
+    public ToolGroupEntity save(ToolGroupEntity group) {
+        return toolGroupRepository.save(group);
+    }
+
+    public List<ToolUnitEntity> findAllUnitsWithDetails() {
+        return toolUnitRepository.findAllWithToolGroup();
+    }
+
+    public ToolUnitEntity save(ToolUnitEntity unit) {
+        return toolUnitRepository.save(unit);
+    }
+
+    public long getRealStock(Long toolGroupId) {
+        return toolUnitRepository.countByToolGroupIdAndStatusNot(toolGroupId, ToolStatus.RETIRED);
+    }
 }

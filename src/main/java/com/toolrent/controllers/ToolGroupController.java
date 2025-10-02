@@ -1,7 +1,10 @@
 package com.toolrent.controllers;
 
 import com.toolrent.entities.ToolGroupEntity;
+import com.toolrent.entities.ToolStatus;
+import com.toolrent.entities.ToolUnitEntity;
 import com.toolrent.services.ToolGroupService;
+import com.toolrent.services.ToolUnitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -16,9 +19,12 @@ import java.util.List;
 public class ToolGroupController {
 
     private final ToolGroupService toolGroupService;
+    private final ToolUnitService toolUnitService;
 
-    public ToolGroupController(ToolGroupService toolGroupService) {
+    public ToolGroupController(ToolGroupService toolGroupService,
+                               ToolUnitService toolUnitService) {
         this.toolGroupService = toolGroupService;
+        this.toolUnitService = toolUnitService;
     }
 
     @PostMapping
@@ -48,4 +54,64 @@ public class ToolGroupController {
     public ResponseEntity<List<ToolGroupEntity>> getAvailableToolGroups() {
         return ResponseEntity.ok(toolGroupService.getToolGroupsWithAvailableUnits());
     }
+
+
+    @PutMapping("/{id}/tariff")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Editar tarifa de un grupo de herramientas")
+    public ResponseEntity<ToolGroupEntity> updateTariff(
+            @PathVariable Long id,
+            @RequestParam Double dailyRentalRate,
+            @RequestParam Double dailyFineRate) {
+
+        ToolGroupEntity group = toolGroupService.findById(id);
+        group.getTariff().setDailyRentalRate(dailyRentalRate);
+        group.getTariff().setDailyFineRate(dailyFineRate);
+        return ResponseEntity.ok(toolGroupService.save(group));
+    }
+
+    /* ---------- Listar todas las unidades con detalles ---------- */
+    @GetMapping("/units")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    @Operation(summary = "Obtener todas las herramientas de forma unitaria")
+    public ResponseEntity<List<ToolUnitEntity>> getAllUnitsWithDetails() {
+        return ResponseEntity.ok(toolGroupService.findAllUnitsWithDetails());
+    }
+
+
+    @PutMapping("/units/{unitId}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Cambiar el estado de una herramienta")
+    public ResponseEntity<ToolUnitEntity> changeUnitStatus(
+            @PathVariable Long unitId,
+            @RequestParam ToolStatus newStatus) {
+        
+        ToolUnitEntity updated = toolUnitService.changeStatus(unitId, newStatus);
+        return ResponseEntity.ok(updated);
+    }
+
+
+    @GetMapping("/{id}/real-stock")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    @Operation(summary = "Obtener el stock real")
+    public ResponseEntity<Long> getRealStock(@PathVariable Long id) {
+        return ResponseEntity.ok(toolGroupService.getRealStock(id));
+    }
+
+
+    /* ---------- NUEVO: resolver reparación ---------- */
+    @PutMapping("/units/{unitId}/repair-resolution")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Resolver reparación: disponible o retirada")
+    public ResponseEntity<ToolUnitEntity> resolveRepair(
+            @PathVariable Long unitId,
+            @RequestParam boolean retire) {
+
+        ToolStatus target = retire ? ToolStatus.RETIRED : ToolStatus.AVAILABLE;
+        ToolUnitEntity updated = toolUnitService.changeStatus(unitId, target);
+        return ResponseEntity.ok(updated);
+    }
+
+
+
 }

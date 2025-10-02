@@ -1,12 +1,12 @@
 package com.toolrent.entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
-
 
 @ToString(exclude = "toolGroup")
 @Entity
@@ -22,7 +22,7 @@ public class ToolUnitEntity {
 
     @ManyToOne
     @JoinColumn(name = "tool_group_id", nullable = false)
-    @JsonIgnore
+    @JsonIgnoreProperties({"units", "tariff", "replacementValue", "category"})
     private ToolGroupEntity toolGroup;
 
     @Enumerated(EnumType.STRING)
