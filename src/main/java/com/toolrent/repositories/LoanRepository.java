@@ -1,6 +1,6 @@
 package com.toolrent.repositories;
 
-import com.toolrent.config.LoanActiveDTO;
+import com.toolrent.dto.LoanActiveDTO;
 import com.toolrent.entities.LoanEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -15,47 +15,93 @@ import java.util.Map;
 public interface LoanRepository extends JpaRepository<LoanEntity, Long> {
 
     // Préstamos activos (sin devolución) en rango de fecha de préstamo
-    @Query("SELECT l FROM LoanEntity l " +
-            "WHERE l.returnDate IS NULL " +
-            "AND l.loanDate BETWEEN :from AND :to " +
-            "ORDER BY l.dueDate ASC")
-    List<LoanEntity> findActiveLoansInRangeReport(@Param("from") LocalDateTime from,
-                                            @Param("to") LocalDateTime to);
-
-
-    //Query para mostrar los préstamos activos en el front
     @Query("""
-    SELECT new com.toolrent.config.LoanActiveDTO(
-           l.id,
-           c.name,
-           tg.name,
-           l.loanDate,
-           l.dueDate,
-           l.returnDate)
-    FROM LoanEntity l
-    JOIN l.customer c
-    JOIN l.toolUnit tu
-    JOIN tu.toolGroup tg
-    WHERE l.returnDate IS NULL
-      AND l.loanDate BETWEEN :from AND :to
-    ORDER BY l.dueDate ASC
-""")
+        SELECT new com.toolrent.dto.LoanActiveDTO(
+               l.id,
+               c.name,
+               tg.name,
+               l.loanDate,
+               l.dueDate,
+               l.returnDate,
+               l.fineAmount,
+               l.damageCharge)
+        FROM LoanEntity l
+        JOIN l.customer c
+        JOIN l.toolUnit tu
+        JOIN tu.toolGroup tg
+        WHERE l.returnDate IS NULL
+          AND l.loanDate BETWEEN :from AND :to
+        ORDER BY l.dueDate ASC
+    """)
     List<LoanActiveDTO> findActiveLoansInRange(@Param("from") LocalDateTime from,
                                                @Param("to") LocalDateTime to);
 
-    // Ranking de grupos más prestados en un rango de fechas
+    // Ranking de grupos más prestados en un rango de fechas (nativo)
     @Query(value = """
-    SELECT tg.id   AS toolGroupId,
-           tg.name AS toolGroupName,
-           COUNT(l.id) AS total
-    FROM loans l
-    JOIN tool_units tu ON l.tool_unit_id = tu.id
-    JOIN tool_groups tg ON tu.tool_group_id = tg.id
-    WHERE l.loan_date BETWEEN :from AND :to
-    GROUP BY tg.id, tg.name
-    ORDER BY total DESC
+        SELECT tg.id   AS toolGroupId,
+               tg.name AS toolGroupName,
+               COUNT(l.id) AS total
+        FROM loans l
+        JOIN tool_units tu ON l.tool_unit_id = tu.id
+        JOIN tool_groups tg ON tu.tool_group_id = tg.id
+        WHERE l.loan_date BETWEEN :from AND :to
+        GROUP BY tg.id, tg.name
+        ORDER BY total DESC
     """, nativeQuery = true)
     List<Map<String, Object>> countLoansByToolGroupInRange(@Param("from") LocalDateTime from,
                                                            @Param("to") LocalDateTime to);
 
+    // Préstamos devueltos CON deudas (multa o daño)
+    @Query("""
+        SELECT new com.toolrent.dto.LoanActiveDTO(
+               l.id,
+               c.name,
+               tg.name,
+               l.loanDate,
+               l.dueDate,
+               l.returnDate,
+               l.fineAmount,
+               l.damageCharge)
+        FROM LoanEntity l
+        JOIN l.customer c
+        JOIN l.toolUnit tu
+        JOIN tu.toolGroup tg
+        WHERE l.returnDate IS NOT NULL
+          AND (l.fineAmount > 0 OR l.damageCharge > 0)
+        ORDER BY l.returnDate DESC
+    """)
+    List<LoanActiveDTO> findReturnedWithDebts();
+
+    // Préstamos pendientes de pago (mismo filtro que arriba, puedes elegir cuál usar)
+    @Query("""
+        SELECT new com.toolrent.dto.LoanActiveDTO(
+               l.id,
+               c.name,
+               tg.name,
+               l.loanDate,
+               l.dueDate,
+               l.returnDate,
+               l.fineAmount,
+               l.damageCharge)
+        FROM LoanEntity l
+        JOIN l.customer c
+        JOIN l.toolUnit tu
+        JOIN tu.toolGroup tg
+        WHERE l.returnDate IS NOT NULL
+          AND (l.fineAmount > 0 OR l.damageCharge > 0)
+        ORDER BY l.returnDate DESC
+    """)
+    List<LoanActiveDTO> findPendingPayment();
+
+    /* ---------- Métodos de validación de negocio ---------- */
+
+    boolean existsByCustomerIdAndReturnDateIsNullAndDueDateBefore(Long customerId, LocalDateTime now);
+
+    boolean existsByCustomerIdAndFineAmountGreaterThanAndReturnDateIsNotNull(Long customerId, double amount);
+
+    boolean existsByCustomerIdAndDamageChargeGreaterThanAndReturnDateIsNotNull(Long customerId, double amount);
+
+    long countByCustomerIdAndReturnDateIsNull(Long customerId);
+
+    boolean existsByCustomerIdAndToolUnitToolGroupIdAndReturnDateIsNull(Long customerId, Long toolGroupId);
 }

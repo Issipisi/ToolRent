@@ -15,5 +15,5 @@ public interface ToolUnitRepository extends JpaRepository<ToolUnitEntity, Long> 
     @Query("SELECT u FROM ToolUnitEntity u JOIN FETCH u.toolGroup g")
     List<ToolUnitEntity> findAllWithToolGroup();
 
-    long countByToolGroupIdAndStatusNot(Long toolGroupId, ToolStatus status);
+    long countByToolGroupIdAndStatus(Long toolGroupId, ToolStatus status);
 }

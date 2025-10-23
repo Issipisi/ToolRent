@@ -1,6 +1,7 @@
 package com.toolrent.services;
 
-import com.toolrent.entities.LoanEntity;
+import com.toolrent.dto.CustomerDebtDTO;
+import com.toolrent.dto.LoanActiveDTO;
 import com.toolrent.entities.CustomerEntity;
 import com.toolrent.repositories.LoanRepository;
 import com.toolrent.repositories.CustomerRepository;
@@ -22,18 +23,23 @@ public class ReportService {
         this.customerRepository = customerRepository;
     }
 
-    /* RF6.1 Préstamos activos (sin devolver) en rango de loanDate */
-    public List<LoanEntity> getActiveLoans(LocalDateTime from, LocalDateTime to) {
-        return loanRepository.findActiveLoansInRangeReport(from, to);
+    /* Préstamos activos (sin devolver) en rango de loanDate */
+    public List<LoanActiveDTO> getActiveLoans(LocalDateTime from, LocalDateTime to) {
+        return loanRepository.findActiveLoansInRange(from, to);
     }
 
-    /* RF6.2 Clientes con al menos un préstamo atrasado */
+    /* Clientes con al menos un préstamo atrasado */
     public List<CustomerEntity> getOverdueCustomers() {
         return customerRepository.findCustomersWithOverdueLoans(LocalDateTime.now());
     }
 
-    /* RF6.3 Ranking de grupos más prestados en rango de loanDate */
+    /* Ranking de herramientas más prestadas en rango de loanDate */
     public List<Map<String, Object>> getTopTools(LocalDateTime from, LocalDateTime to) {
         return loanRepository.countLoansByToolGroupInRange(from, to);
+    }
+
+    /* Clientes con deudas */
+    public List<CustomerDebtDTO> getCustomersWithDebt(LocalDateTime now) {
+        return customerRepository.findCustomersWithDebt(now);
     }
 }

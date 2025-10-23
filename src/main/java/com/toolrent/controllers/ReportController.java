@@ -1,6 +1,7 @@
 package com.toolrent.controllers;
 
-import com.toolrent.entities.LoanEntity;
+import com.toolrent.dto.CustomerDebtDTO;
+import com.toolrent.dto.LoanActiveDTO;
 import com.toolrent.entities.CustomerEntity;
 import com.toolrent.services.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,7 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -28,23 +29,27 @@ public class ReportController {
     }
 
     @GetMapping("/active-loans")
-    public ResponseEntity<List<LoanEntity>> getActiveLoans(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+    @Operation(summary = "Listar préstamos activos", description = "Muestra todos los prestamos activos.")
+    public ResponseEntity<List<LoanActiveDTO>> getActiveLoans(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
 
-        if (from == null) from = LocalDate.now().minusMonths(1);
-        if (to == null)   to = LocalDate.now();
-        return ResponseEntity.ok(reportService.getActiveLoans(from.atStartOfDay(), to.plusDays(1).atStartOfDay()));
+        if (from == null) from = LocalDateTime.now().minusMonths(1);
+        if (to == null)   to = LocalDateTime.now();
+
+        return ResponseEntity.ok(reportService.getActiveLoans(from, to));
     }
 
     @GetMapping("/top-tools")
+    @Operation(summary = "Listar ranking de Herramientas", description = "Ranking de herramientas más prestadas.")
     public ResponseEntity<List<Map<String, Object>>> getTopTools(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
 
-        if (from == null) from = LocalDate.now().minusMonths(1);
-        if (to == null)   to = LocalDate.now();
-        return ResponseEntity.ok(reportService.getTopTools(from.atStartOfDay(), to.plusDays(1).atStartOfDay()));
+        if (from == null) from = LocalDateTime.now().minusMonths(1);
+        if (to == null)   to = LocalDateTime.now();
+
+        return ResponseEntity.ok(reportService.getTopTools(from, to));
     }
 
     @GetMapping("/overdue-customers")
@@ -56,5 +61,16 @@ public class ReportController {
     })
     public ResponseEntity<List<CustomerEntity>> getOverdueCustomers() {
         return ResponseEntity.ok(reportService.getOverdueCustomers());
+    }
+
+    @GetMapping("/customers-with-debt")
+    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
+    @Operation(summary = "Listar clientes con deudas", description = "Retorna clientes con deudas.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Lista de clientes"),
+            @ApiResponse(responseCode = "403", description = "No autorizado")
+    })
+    public ResponseEntity<List<CustomerDebtDTO>> getCustomersWithDebt() {
+        return ResponseEntity.ok(reportService.getCustomersWithDebt(LocalDateTime.now()));
     }
 }

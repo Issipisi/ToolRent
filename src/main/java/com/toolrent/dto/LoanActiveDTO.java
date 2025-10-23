@@ -1,4 +1,4 @@
-package com.toolrent.config;
+package com.toolrent.dto;
 
 import java.time.LocalDateTime;
 
@@ -8,13 +8,16 @@ public record LoanActiveDTO(
         String toolName,
         LocalDateTime loanDate,
         LocalDateTime dueDate,
-        String status   // se calculará
+        LocalDateTime returnDate,
+        Double fineAmount,
+        Double damageCharge,
+        String status
 ) {
-    // Constructor compacto: se ejecuta después de los JOIN
     public LoanActiveDTO(Long id, String customerName, String toolName,
                          LocalDateTime loanDate, LocalDateTime dueDate,
-                         LocalDateTime returnDate) {
-        this(id, customerName, toolName, loanDate, dueDate,
+                         LocalDateTime returnDate, Double fineAmount, Double damageCharge) {
+        this(id, customerName, toolName, loanDate, dueDate, returnDate,
+                fineAmount, damageCharge,
                 returnDate == null ? "ACTIVE" : "RETURNED");
     }
 }

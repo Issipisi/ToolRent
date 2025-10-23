@@ -75,7 +75,7 @@ public class ToolGroupController {
     @PreAuthorize("hasAnyRole('ADMIN')")
     @Operation(summary = "Obtener todas las herramientas de forma unitaria")
     public ResponseEntity<List<ToolUnitEntity>> getAllUnitsWithDetails() {
-        return ResponseEntity.ok(toolGroupService.findAllUnitsWithDetails());
+        return ResponseEntity.ok(toolUnitService.findAllUnitsWithDetails());
     }
 
 
@@ -85,7 +85,7 @@ public class ToolGroupController {
     public ResponseEntity<ToolUnitEntity> changeUnitStatus(
             @PathVariable Long unitId,
             @RequestParam ToolStatus newStatus) {
-        
+
         ToolUnitEntity updated = toolUnitService.changeStatus(unitId, newStatus);
         return ResponseEntity.ok(updated);
     }
@@ -95,11 +95,10 @@ public class ToolGroupController {
     @PreAuthorize("hasAnyRole('ADMIN')")
     @Operation(summary = "Obtener el stock real")
     public ResponseEntity<Long> getRealStock(@PathVariable Long id) {
-        return ResponseEntity.ok(toolGroupService.getRealStock(id));
+        return ResponseEntity.ok(toolUnitService.getRealStock(id));
     }
 
 
-    /* ---------- NUEVO: resolver reparación ---------- */
     @PutMapping("/units/{unitId}/repair-resolution")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Resolver reparación: disponible o retirada")
@@ -112,6 +111,16 @@ public class ToolGroupController {
         return ResponseEntity.ok(updated);
     }
 
+    @PutMapping("/{id}/replacement-value")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Editar valor de reposición de un grupo de herramientas")
+    public ResponseEntity<ToolGroupEntity> updateReplacementValue(
+            @PathVariable Long id,
+            @RequestParam Double replacementValue) {
 
+        ToolGroupEntity group = toolGroupService.findById(id);
+        group.setReplacementValue(replacementValue);
+        return ResponseEntity.ok(toolGroupService.save(group));
+    }
 
 }

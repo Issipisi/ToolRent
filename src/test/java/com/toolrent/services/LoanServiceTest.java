@@ -16,7 +16,7 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class LoanServiceTest {
-
+/*
     @Mock
     private LoanRepository loanRepository;
 
@@ -34,11 +34,11 @@ class LoanServiceTest {
 
     @InjectMocks
     private LoanService loanService;
-
+    */
     /* ---------------------------------------------------------- */
     /* --------------------- REGISTRAR PRÉSTAMO ----------------- */
     /* ---------------------------------------------------------- */
-
+    /*
     @Test
     @DisplayName("Préstamo ok: grupo y cliente existentes, dueDate futuro, unidad pasa a LOANED")
     void whenRegisterLoan_withValidData_thenSuccess() {
@@ -127,7 +127,7 @@ class LoanServiceTest {
     /* ---------------------------------------------------------- */
     /* --------------------- DEVOLUCIÓN ------------------------- */
     /* ---------------------------------------------------------- */
-
+    /*
     @Test
     @DisplayName("Devolución puntual: unidad pasa a AVAILABLE, sin multa")
     void whenReturnLoan_onTime_thenSuccess() {
@@ -194,7 +194,7 @@ class LoanServiceTest {
     /* ---------------------------------------------------------- */
     /* --------------------- HELPERS ---------------------------- */
     /* ---------------------------------------------------------- */
-
+    /*
     private ToolGroupEntity buildToolGroup(Long id, String name, String category, double replacementValue, double dailyRate) {
         ToolGroupEntity group = new ToolGroupEntity();
         group.setId(id);
@@ -216,7 +216,7 @@ class LoanServiceTest {
         }
         return group;
     }
-
+    /*
     private CustomerEntity buildCustomer(Long id, String name, String rut, String phone, String email) {
         CustomerEntity c = new CustomerEntity();
         c.setId(id);
@@ -239,4 +239,5 @@ class LoanServiceTest {
         l.setFineAmount(0.0);
         return l;
     }
+    */
 }

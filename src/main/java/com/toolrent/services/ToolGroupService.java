@@ -1,6 +1,5 @@
 package com.toolrent.services;
 
-import com.toolrent.config.SecurityConfig;
 import com.toolrent.entities.*;
 import com.toolrent.repositories.*;
 import org.springframework.stereotype.Service;
@@ -11,17 +10,14 @@ import java.util.List;
 public class ToolGroupService {
 
     private final ToolGroupRepository toolGroupRepository;
-    private final KardexMovementRepository kardexMovementRepository;
-    private final CustomerService customerService;
+    private final KardexMovementService kardexMovementService;
     private final ToolUnitRepository toolUnitRepository;
 
     public ToolGroupService(ToolGroupRepository toolGroupRepository,
-                            KardexMovementRepository kardexMovementRepository,
-                            CustomerService customerService,
+                            KardexMovementService kardexMovementService,
                             ToolUnitRepository toolUnitRepository) {
         this.toolGroupRepository = toolGroupRepository;
-        this.kardexMovementRepository = kardexMovementRepository;
-        this.customerService = customerService;
+        this.kardexMovementService = kardexMovementService;
         this.toolUnitRepository = toolUnitRepository;
     }
 
@@ -57,25 +53,10 @@ public class ToolGroupService {
         }
 
         ToolGroupEntity saved = toolGroupRepository.save(group);
-        saveRegistryKardex(saved, stock);
+        kardexMovementService.saveRegistryKardex(saved,stock);
 
         return saved;
     }
-
-    private void saveRegistryKardex(ToolGroupEntity group, int stock) {
-        if (stock == 0) return;
-        KardexMovementEntity movement = new KardexMovementEntity();
-        movement.setCustomer(customerService.getSystemCustomer());
-        movement.setToolUnit(group.getUnits().get(0));
-        movement.setMovementType(MovementType.REGISTRY);
-        movement.setDetails("Creación de grupo: " + group.getName() +
-                " - Stock inicial: " + stock +
-                " - Usuario: " + SecurityConfig.getCurrentUsername());
-        kardexMovementRepository.save(movement);
-    }
-
-
-
 
     public Iterable<ToolGroupEntity> getAllToolGroups() {
         return toolGroupRepository.findAll();
@@ -95,17 +76,5 @@ public class ToolGroupService {
 
     public ToolGroupEntity save(ToolGroupEntity group) {
         return toolGroupRepository.save(group);
-    }
-
-    public List<ToolUnitEntity> findAllUnitsWithDetails() {
-        return toolUnitRepository.findAllWithToolGroup();
-    }
-
-    public ToolUnitEntity save(ToolUnitEntity unit) {
-        return toolUnitRepository.save(unit);
-    }
-
-    public long getRealStock(Long toolGroupId) {
-        return toolUnitRepository.countByToolGroupIdAndStatusNot(toolGroupId, ToolStatus.RETIRED);
     }
 }

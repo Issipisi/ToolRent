@@ -7,6 +7,8 @@ import com.toolrent.config.SecurityConfig;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 
 @Service
 public class ToolUnitService {
@@ -68,12 +70,15 @@ public class ToolUnitService {
                 .orElseThrow(() -> new RuntimeException("No hay unidades disponibles"));
     }
 
-    public ToolUnitEntity findByIdUnit(Long unitId) {
-        return toolUnitRepository.findById(unitId)
-                .orElseThrow(() -> new RuntimeException("Unit not found"));
+    public List<ToolUnitEntity> findAllUnitsWithDetails() {
+        return toolUnitRepository.findAllWithToolGroup();
     }
 
     public ToolUnitEntity save(ToolUnitEntity unit) {
         return toolUnitRepository.save(unit);
+    }
+
+    public long getRealStock(Long toolGroupId) {
+        return toolUnitRepository.countByToolGroupIdAndStatus(toolGroupId, ToolStatus.AVAILABLE);
     }
 }
