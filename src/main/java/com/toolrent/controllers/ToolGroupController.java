@@ -15,7 +15,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/tools")
-@Tag(name = "Tool Group Controller", description = "Gestión de grupos de herramientas")
+@Tag(name = "Tool Group Controller", description = "Gestión de grupos y unidades de herramientas")
 public class ToolGroupController {
 
     private final ToolGroupService toolGroupService;
@@ -109,6 +109,14 @@ public class ToolGroupController {
         ToolStatus target = retire ? ToolStatus.RETIRED : ToolStatus.AVAILABLE;
         ToolUnitEntity updated = toolUnitService.changeStatus(unitId, target);
         return ResponseEntity.ok(updated);
+    }
+
+    @PutMapping("/units/{unitId}/retire-from-repair")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Retirar unidad en reparación y cargar valor de reposición como deuda")
+    public ResponseEntity<String> retireFromRepair(@PathVariable Long unitId) {
+        toolUnitService.retireFromRepair(unitId);
+        return ResponseEntity.ok("Unidad retirada y deuda cargada");
     }
 
     @PutMapping("/{id}/replacement-value")

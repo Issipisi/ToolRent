@@ -1,122 +1,161 @@
 package com.toolrent.services;
 
-
+import com.toolrent.config.SecurityConfig;
+import com.toolrent.entities.*;
+import com.toolrent.repositories.KardexMovementRepository;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class KardexMovementServiceTest {
 
-    /*@Mock
-    private KardexMovementRepository kardexMovementRepository;
+    @Mock private KardexMovementRepository kardexMovementRepository;
+    @Mock private CustomerService customerService;
+    @InjectMocks private KardexMovementService kardexService;
 
-    @InjectMocks
-    private KardexMovementService kardexMovementService;
+    /* ======================================================================
+            1. getAllMovements(lista vacía / con datos)
+       ====================================================================== */
 
-    /* ---------------------------------------------------------- */
-    /* --------------------- CATÁLOGO COMPLETO ------------------ */
-    /* ---------------------------------------------------------- */
+    @Test @DisplayName("getAllMovements – con datos")
+    void getAll_withData(){
+        KardexMovementEntity m1 = buildMovement(1L, MovementType.LOAN);
+        KardexMovementEntity m2 = buildMovement(2L, MovementType.RETURN);
+        when(kardexMovementRepository.findAllWithDetails()).thenReturn(List.of(m1,m2));
 
-    /*@Test
-    @DisplayName("10 000 registros → no falla y mantiene tamaño")
-    void whenGetAllMovements_withLargeDataset_thenDoesNotFail() {
-        ToolGroupEntity group = buildToolGroup();
-        ToolUnitEntity unit = group.getUnits().get(0);
-        CustomerEntity customer = buildCustomer();
+        List<KardexMovementEntity> res = kardexService.getAllMovements();
 
-        List<KardexMovementDTO> bigList = IntStream.rangeClosed(1, 10_000)
-                .mapToObj(i -> buildKardexDTO((long) i,
-                        i % 2 == 0 ? MovementType.LOAN : MovementType.RETURN,
-                        "Auto-generated"))
-                .toList();
-
-        when(kardexMovementRepository.findAllProjected()).thenReturn(bigList);
-
-        List<KardexMovementDTO> result = kardexMovementService.getAllMovements();
-
-        assertThat(result).hasSize(10_000);
-        verify(kardexMovementRepository).findAllProjected();
+        assertThat(res).hasSize(2);
+        verify(kardexMovementRepository).findAllWithDetails();
     }
 
-    @Test
-    @DisplayName("Details null → acepta sin problema")
-    void whenGetAllMovements_withNullDetails_thenAcceptsNull() {
-        KardexMovementDTO dto = buildKardexDTO(1L, MovementType.REPAIR, null);
+    @Test @DisplayName("getAllMovements – vacía")
+    void getAll_empty(){
+        when(kardexMovementRepository.findAllWithDetails()).thenReturn(List.of());
 
-        when(kardexMovementRepository.findAllProjected()).thenReturn(List.of(dto));
+        List<KardexMovementEntity> res = kardexService.getAllMovements();
 
-        List<KardexMovementDTO> result = kardexMovementService.getAllMovements();
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).details()).isNull();
+        assertThat(res).isEmpty();
     }
 
-    @Test
-    @DisplayName("Cubre todos los tipos de movimiento")
-    void whenGetAllMovements_withAllMovementTypes_thenCoverageComplete() {
-        List<KardexMovementDTO> list = List.of(
-                buildKardexDTO(1L, MovementType.REGISTRY, "Initial registry"),
-                buildKardexDTO(2L, MovementType.LOAN, "Loan 3 units"),
-                buildKardexDTO(3L, MovementType.RETURN, "Return 3 units"),
-                buildKardexDTO(4L, MovementType.RETIRE, "Retire damaged"),
-                buildKardexDTO(5L, MovementType.REPAIR, "Sent to repair")
-        );
+    /* ======================================================================
+              2. findByToolGroupId(vacía / con datos)
+       ====================================================================== */
 
-        when(kardexMovementRepository.findAllProjected()).thenReturn(list);
+    @Test @DisplayName("findByToolGroupId – con datos")
+    void byToolGroup_withData(){
+        KardexMovementEntity m = buildMovement(3L, MovementType.REGISTRY);
+        when(kardexMovementRepository.findByToolGroupId(10L)).thenReturn(List.of(m));
 
-        List<KardexMovementDTO> result = kardexMovementService.getAllMovements();
+        List<KardexMovementEntity> res = kardexService.findByToolGroupId(10L);
 
-        assertThat(result)
-                .hasSize(5)
-                .extracting(KardexMovementDTO::movementType)
-                .containsExactly(MovementType.REGISTRY, MovementType.LOAN,
-                        MovementType.RETURN, MovementType.RETIRE, MovementType.REPAIR);
+        assertThat(res).hasSize(1);
+        verify(kardexMovementRepository).findByToolGroupId(10L);
     }
 
-    /* ---------------------------------------------------------- */
-    /* --------------------- HELPERS ---------------------------- */
-    /* ---------------------------------------------------------- */
+    @Test @DisplayName("findByToolGroupId – vacía")
+    void byToolGroup_empty(){
+        when(kardexMovementRepository.findByToolGroupId(99L)).thenReturn(List.of());
 
-    /*private ToolGroupEntity buildToolGroup() {
-        ToolGroupEntity group = new ToolGroupEntity();
-        group.setId(1L);
-        group.setName("X");
-        group.setCategory("Y");
-        group.setReplacementValue(1000.0);
+        List<KardexMovementEntity> res = kardexService.findByToolGroupId(99L);
 
-        TariffEntity tariff = new TariffEntity();
-        tariff.setDailyRentalRate(100.0);
-        tariff.setDailyFineRate(100.0 * 2);
-        group.setTariff(tariff);
+        assertThat(res).isEmpty();
+    }
 
-        for (int i = 0; i < 3; i++) {
-            ToolUnitEntity unit = new ToolUnitEntity();
-            unit.setId((long) (i + 1));
-            unit.setStatus(ToolStatus.AVAILABLE);
-            unit.setToolGroup(group);
-            group.getUnits().add(unit);
+    /* ======================================================================
+              3. findByDateRange(invertido / normal / vacío)
+       ====================================================================== */
+
+    @Test @DisplayName("findByDateRange – rango válido")
+    void dateRange_ok(){
+        LocalDateTime from = LocalDateTime.of(2025,1,1,0,0);
+        LocalDateTime to   = LocalDateTime.of(2025,1,31,23,59);
+        KardexMovementEntity m = buildMovement(4L, MovementType.RETIRE);
+        when(kardexMovementRepository.findByDateRange(from,to)).thenReturn(List.of(m));
+
+        List<KardexMovementEntity> res = kardexService.findByDateRange(from,to);
+
+        assertThat(res).hasSize(1);
+    }
+
+    @Test @DisplayName("findByDateRange – vacío")
+    void dateRange_empty(){
+        LocalDateTime from = LocalDateTime.of(2025,2,1,0,0);
+        LocalDateTime to   = LocalDateTime.of(2025,2,1,0,0);
+        when(kardexMovementRepository.findByDateRange(from,to)).thenReturn(List.of());
+
+        List<KardexMovementEntity> res = kardexService.findByDateRange(from,to);
+
+        assertThat(res).isEmpty();
+    }
+
+    /* ======================================================================
+              4. saveRegistryKardex – 100 % branch  (stock == 0  /  >0)
+       ====================================================================== */
+
+    @Test @DisplayName("saveRegistryKardex – stock 0 → no hace nada")
+    void registry_stockZero(){
+        // Solo necesitamos un grupo cualquiera; no hace falta mockear getUnits/getName
+        ToolGroupEntity group = mock(ToolGroupEntity.class);
+
+        kardexService.saveRegistryKardex(group, 0);
+
+        verifyNoInteractions(kardexMovementRepository);
+    }
+
+    @Test @DisplayName("saveRegistryKardex – stock >0 → guarda movimiento")
+    void registry_positiveStock(){
+        try (MockedStatic<SecurityConfig> mocked = mockStatic(SecurityConfig.class)) {
+            mocked.when(SecurityConfig::getCurrentUsername).thenReturn("admin");
+
+            ToolGroupEntity group = mockGroupWithUnits();
+            CustomerEntity systemCustomer = new CustomerEntity();
+            systemCustomer.setName("Sistema");
+            when(customerService.getSystemCustomer()).thenReturn(systemCustomer);
+
+            KardexMovementEntity saved = new KardexMovementEntity();
+            saved.setId(100L);
+            when(kardexMovementRepository.save(any(KardexMovementEntity.class))).thenReturn(saved);
+
+            kardexService.saveRegistryKardex(group, 5);
+
+            ArgumentCaptor<KardexMovementEntity> captor =
+                    ArgumentCaptor.forClass(KardexMovementEntity.class);
+            verify(kardexMovementRepository).save(captor.capture());
+
+            KardexMovementEntity captured = captor.getValue();
+            assertThat(captured.getMovementType()).isEqualTo(MovementType.REGISTRY);
+            assertThat(captured.getCustomer()).isSameAs(systemCustomer);
+            assertThat(captured.getDetails()).contains("Creación de grupo")
+                    .contains("Stock inicial: 5")
+                    .contains("Usuario: admin");
         }
-        return group;
     }
 
-    private CustomerEntity buildCustomer() {
-        CustomerEntity c = new CustomerEntity();
-        c.setId(1L);
-        c.setName("Sys");
-        c.setRut("0-0");
-        c.setPhone("000");
-        c.setEmail("sys@test.com");
-        c.setStatus(CustomerStatus.ACTIVE);
-        return c;
+    /* ======================================================================
+                                  Helpers                                                               /
+       ====================================================================== */
+
+    private KardexMovementEntity buildMovement(Long id, MovementType type){
+        KardexMovementEntity m = new KardexMovementEntity();
+        m.setId(id);
+        m.setMovementType(type);
+        return m;
     }
 
-    private KardexMovementDTO buildKardexDTO(Long id, MovementType type, String details) {
-        return new KardexMovementDTO(
-                id,
-                "2025-09-29 12:00",   // fecha simulada
-                type,
-                "Taladro",            // toolName
-                "Cliente Genérico",   // customerName
-                details);
-    }*/
+    private ToolGroupEntity mockGroupWithUnits(){
+        ToolGroupEntity g = mock(ToolGroupEntity.class);
+        List<ToolUnitEntity> list = List.of(mock(ToolUnitEntity.class));
+        when(g.getUnits()).thenReturn(list);
+        when(g.getName()).thenReturn("Taladro");
+        return g;
+    }
 }

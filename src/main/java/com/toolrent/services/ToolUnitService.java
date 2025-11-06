@@ -1,6 +1,7 @@
 package com.toolrent.services;
 
 import com.toolrent.entities.*;
+import com.toolrent.repositories.LoanRepository;
 import com.toolrent.repositories.ToolUnitRepository;
 import com.toolrent.repositories.KardexMovementRepository;
 import com.toolrent.config.SecurityConfig;
@@ -16,13 +17,16 @@ public class ToolUnitService {
     private final ToolUnitRepository toolUnitRepository;
     private final KardexMovementRepository kardexMovementRepository;
     private final CustomerService customerService;
+    private final LoanRepository loanRepository;
 
     public ToolUnitService(ToolUnitRepository toolUnitRepository,
                            KardexMovementRepository kardexMovementRepository,
-                           CustomerService customerService) {
+                           CustomerService customerService,
+                           LoanRepository loanRepository) {
         this.toolUnitRepository = toolUnitRepository;
         this.kardexMovementRepository = kardexMovementRepository;
         this.customerService = customerService;
+        this.loanRepository = loanRepository;
     }
 
     @Transactional
@@ -54,6 +58,7 @@ public class ToolUnitService {
         return toolUnitRepository.save(unit);
     }
 
+    // Movimientos posibles del kárdex para herramientas
     private MovementType mapStatusToMovementType(ToolStatus status) {
         return switch (status) {
             case IN_REPAIR -> MovementType.REPAIR;
@@ -63,11 +68,39 @@ public class ToolUnitService {
         };
     }
 
-    /* Buscar una unidad disponible de un grupo */
+    // Buscar una unidad disponible de un grupo
     public ToolUnitEntity findAvailableUnit(Long toolGroupId) {
         return toolUnitRepository
                 .findFirstByToolGroupIdAndStatus(toolGroupId, ToolStatus.AVAILABLE)
                 .orElseThrow(() -> new RuntimeException("No hay unidades disponibles"));
+    }
+
+    // Retira una unidad que está en reparación y carga el valor de reposición
+    // como deuda al último préstamo devuelto de esa unidad.
+    @Transactional
+    public void retireFromRepair(Long unitId) {
+        ToolUnitEntity unit = findById(unitId);
+        if (unit.getStatus() != ToolStatus.IN_REPAIR) {
+            throw new RuntimeException("La unidad no está en reparación");
+        }
+
+        // Último préstamo devuelto de esta unidad
+        LoanEntity loan = loanRepository
+                .findTopByToolUnitIdAndReturnDateIsNotNullOrderByReturnDateDesc(unitId)
+                .orElseThrow(() -> new RuntimeException("No se encontró préstamo devuelto para esta unidad"));
+
+        // Cargar valor de reposición como deuda
+        loan.setDamageCharge(unit.getToolGroup().getReplacementValue());
+        loanRepository.save(loan);
+
+        // Cambiar estado
+        changeStatus(unitId, ToolStatus.RETIRED);
+    }
+
+
+    public ToolUnitEntity findById(Long unitId) {
+        return toolUnitRepository.findById(unitId)
+                .orElseThrow(() -> new RuntimeException("Unidad no encontrada"));
     }
 
     public List<ToolUnitEntity> findAllUnitsWithDetails() {

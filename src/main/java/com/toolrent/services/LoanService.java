@@ -35,10 +35,10 @@ public class LoanService {
     // REGISTRAR PRÉSTAMO
     public LoanEntity registerLoan(Long toolGroupId, Long customerId, LocalDateTime dueDate) {
         /* ---------- Validaciones de negocio ---------- */
-        /* Restricción fecha de devolución
+        // Restricción fecha de devolución
         if (dueDate.isBefore(LocalDateTime.now())) {
             throw new RuntimeException("La fecha de devolución no puede ser anterior a la fecha actual");
-        }*/
+        }
 
         // Préstamos vencidos sin devolver
         boolean hasOverdueLoans = loanRepository.existsByCustomerIdAndReturnDateIsNullAndDueDateBefore(customerId, LocalDateTime.now());
@@ -126,17 +126,26 @@ public class LoanService {
             toolUnitRepository.save(unit);
         } else {
             loan.setDamageCharge(damageCharge); // daño leve
+            unit.setStatus(damageCharge > 0 ? ToolStatus.IN_REPAIR : ToolStatus.AVAILABLE);
         }
 
-        unit.setStatus(ToolStatus.AVAILABLE);
         toolUnitRepository.save(unit);
         loanRepository.save(loan);
 
         /* ---------- Kardex ---------- */
+        MovementType movementType;
+        if (irreparable) {
+            movementType = MovementType.RETIRE;
+        } else if (damageCharge > 0) {
+            movementType = MovementType.REPAIR; // ← daño leve
+        } else {
+            movementType = MovementType.RETURN; // ← sin daño
+        }
+
         KardexMovementEntity movement = new KardexMovementEntity();
         movement.setToolUnit(unit);
         movement.setCustomer(customer);
-        movement.setMovementType(irreparable ? MovementType.RETIRE : MovementType.RETURN);
+        movement.setMovementType(movementType);
         movement.setDetails("Devolución ID: " + loanId + " - Daño: " + damageCharge + " - Usuario: "
                 + SecurityConfig.getCurrentUsername());
         kardexMovementRepository.save(movement);

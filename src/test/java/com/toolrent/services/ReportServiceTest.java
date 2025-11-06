@@ -1,10 +1,10 @@
 package com.toolrent.services;
-/*
-import com.toolrent.entities.*;
-import com.toolrent.repositories.KardexMovementRepository;
-import com.toolrent.repositories.LoanRepository;
+
+import com.toolrent.dto.CustomerDebtDTO;
+import com.toolrent.dto.LoanActiveDTO;
+import com.toolrent.entities.CustomerEntity;
 import com.toolrent.repositories.CustomerRepository;
-import com.toolrent.repositories.ToolUnitRepository;
+import com.toolrent.repositories.LoanRepository;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -14,256 +14,128 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+
 @ExtendWith(MockitoExtension.class)
-@DisplayName("ReportService - Casos límite y concurrencia (Mockito)")
-*/
 class ReportServiceTest {
-/*
-    @Mock
-    private LoanRepository loanRepository;
 
-    @Mock
-    private CustomerRepository customerRepository;
+    @Mock private LoanRepository loanRepository;
+    @Mock private CustomerRepository customerRepository;
 
-    @Mock
-    private ToolUnitRepository toolUnitRepository;
+    @InjectMocks private ReportService reportService;
 
-    @Mock
-    private KardexMovementRepository kardexMovementRepository;
+    /* ======================================================================
+              1. getActiveLoans – (vacía / con datos)
+       ====================================================================== */
 
-    @InjectMocks
-    private ReportService reportService;
+    @Test @DisplayName("getActiveLoans – con datos")
+    void getActiveLoans_withData(){
+        LocalDateTime from = LocalDateTime.of(2025, 1, 1, 0, 0);
+        LocalDateTime to   = LocalDateTime.of(2025, 1, 31, 23, 59);
+        List<LoanActiveDTO> data = List.of(mock(LoanActiveDTO.class), mock(LoanActiveDTO.class));
+        when(loanRepository.findActiveLoansInRange(from, to)).thenReturn(data);
 
-    @InjectMocks
-    private LoanService loanService;
+        List<LoanActiveDTO> res = reportService.getActiveLoans(from, to);
 
-    /* Fechas fijas reproducibles */
-    /*
-    private static final LocalDateTime D1  = LocalDateTime.of(2025, 9, 1, 0, 0);
-    private static final LocalDateTime D5  = LocalDateTime.of(2025, 9, 5, 0, 0);
-    private static final LocalDateTime D15 = LocalDateTime.of(2025, 9, 15, 0, 0);
-    private static final LocalDateTime D20 = LocalDateTime.of(2025, 9, 20, 0, 0);
-
-    /* ---------- RF6.1 Casos límite ---------- */
-    /*
-    @Test
-    @DisplayName("Rango sin préstamos debe devolver lista vacía")
-    void whenActiveLoansRangeEmpty_thenEmpty() {
-        when(loanRepository.findActiveLoansInRange(D20, D20.plusDays(1)))
-                .thenReturn(List.of());
-
-        assertThat(reportService.getActiveLoans(D20, D20.plusDays(1))).isEmpty();
-        verify(loanRepository).findActiveLoansInRange(D20, D20.plusDays(1));
+        assertThat(res).hasSize(2);
+        verify(loanRepository).findActiveLoansInRange(from, to);
     }
 
-    @Test
-    @DisplayName("Todos los préstamos devueltos debe devolver lista vacía")
-    void whenAllReturned_thenEmpty() {
-        when(loanRepository.findActiveLoansInRange(D1, D20))
-                .thenReturn(List.of());
+    @Test @DisplayName("getActiveLoans – vacía")
+    void getActiveLoans_empty(){
+        LocalDateTime from = LocalDateTime.of(2025, 2, 1, 0, 0);
+        LocalDateTime to   = LocalDateTime.of(2025, 2, 1, 0, 0);
+        when(loanRepository.findActiveLoansInRange(from, to)).thenReturn(List.of());
 
-        assertThat(reportService.getActiveLoans(D1, D20)).isEmpty();
-        verify(loanRepository).findActiveLoansInRange(D1, D20);
+        List<LoanActiveDTO> res = reportService.getActiveLoans(from, to);
+
+        assertThat(res).isEmpty();
     }
 
+    /* ======================================================================
+              2. getOverdueCustomers
+       ====================================================================== */
 
-    @Test
-    @DisplayName("Devolución atrasada: calcula multa")
-    void whenReturnLoan_withDelay_thenAppliesFine() {
-        Long loanId = 1L;
-        LocalDateTime dueDate = LocalDateTime.now().minusDays(3);
+    @Test @DisplayName("getOverdueCustomers – con datos")
+    void getOverdueCustomers_withData(){
+        CustomerEntity c1 = new CustomerEntity();
+        c1.setId(1L);
+        CustomerEntity c2 = new CustomerEntity();
+        c2.setId(2L);
+        List<CustomerEntity> data = List.of(c1, c2);
+        when(customerRepository.findCustomersWithOverdueLoans(any(LocalDateTime.class))).thenReturn(data);
 
-        ToolGroupEntity group = buildToolGroup();
+        List<CustomerEntity> res = reportService.getOverdueCustomers();
 
-        // Crea y añade una unidad manualmente
-        ToolUnitEntity unit = new ToolUnitEntity();
-        unit.setId(1L);
-        unit.setStatus(ToolStatus.LOANED);
-        unit.setToolGroup(group);
-        group.getUnits().add(unit);
-
-        CustomerEntity customer = buildCustomer("Ana");
-        LoanEntity loan = buildLoan(customer, unit);
-        loan.setDueDate(dueDate);
-
-        when(loanRepository.findById(loanId)).thenReturn(Optional.of(loan));
-
-        loanService.returnLoan(loanId);
-
-        assertThat(unit.getStatus()).isEqualTo(ToolStatus.AVAILABLE);
-        assertThat(loan.getReturnDate()).isNotNull();
-        assertThat(loan.getFineAmount()).isEqualTo(600.0);
-
-        verify(toolUnitRepository).save(unit);
-        verify(loanRepository).save(loan);
-        verify(kardexMovementRepository).save(any(KardexMovementEntity.class));
-    }
-
-    /* ---------- RF6.2 Casos límite ---------- */
-    /*
-    @Test
-    @DisplayName("Sin atrasos debe devolver lista vacía")
-    void whenNoOverdue_thenEmpty() {
-        when(customerRepository.findCustomersWithOverdueLoans(any()))
-                .thenReturn(List.of());
-
-        assertThat(reportService.getOverdueCustomers()).isEmpty();
+        assertThat(res).hasSize(2);
         verify(customerRepository).findCustomersWithOverdueLoans(any(LocalDateTime.class));
     }
 
-    @Test
-    @DisplayName("Mismo cliente con varios atrasos debe aparecer una sola vez")
-    void whenSameCustomerMultipleOverdue_thenUnique() {
-        CustomerEntity c = buildCustomer("Luis");
+    @Test @DisplayName("getOverdueCustomers – vacía")
+    void getOverdueCustomers_empty(){
+        when(customerRepository.findCustomersWithOverdueLoans(any(LocalDateTime.class))).thenReturn(List.of());
 
-        when(customerRepository.findCustomersWithOverdueLoans(any(LocalDateTime.class)))
-                .thenReturn(List.of(c));
+        List<CustomerEntity> res = reportService.getOverdueCustomers();
 
-        List<CustomerEntity> result = reportService.getOverdueCustomers();
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getName()).isEqualTo("Luis");
-        verify(customerRepository).findCustomersWithOverdueLoans(any(LocalDateTime.class));
+        assertThat(res).isEmpty();
     }
 
-    /* ---------- RF6.3 Casos límite ---------- */
-    /*
-    @Test
-    @DisplayName("Rango sin préstamos debe devolver lista vacía")
-    void whenTopToolsRangeEmpty_thenEmpty() {
-        when(loanRepository.countLoansByToolGroupInRange(D20, D20.plusDays(1)))
-                .thenReturn(List.of());
+    /* ======================================================================
+              3. getTopTools – (vacía / con datos / top 0 / top > size)
+       ====================================================================== */
 
-        assertThat(reportService.getTopTools(D20, D20.plusDays(1))).isEmpty();
-        verify(loanRepository).countLoansByToolGroupInRange(D20, D20.plusDays(1));
-    }
-
-    @Test
-    @DisplayName("Empate en cantidad debe mantener orden descendente")
-    void whenTopToolsTie_thenOrderConserved() {
-        Map<String, Object> row1 = Map.of(
-                "toolGroupId", 1L,
-                "toolGroupName", "A",
-                "total", 5L
+    @Test @DisplayName("getTopTools – con datos")
+    void getTopTools_withData(){
+        LocalDateTime from = LocalDateTime.of(2025, 1, 1, 0, 0);
+        LocalDateTime to   = LocalDateTime.of(2025, 1, 31, 23, 59);
+        List<Map<String, Object>> data = List.of(
+                Map.of("toolGroupId", 1L, "toolName", "Taladro", "loanCount", 15L),
+                Map.of("toolGroupId", 2L, "toolName", "Lijadora", "loanCount", 8L)
         );
-        Map<String, Object> row2 = Map.of(
-                "toolGroupId", 2L,
-                "toolGroupName", "B",
-                "total", 5L
-        );
+        when(loanRepository.countLoansByToolGroupInRange(from, to)).thenReturn(data);
 
-        when(loanRepository.countLoansByToolGroupInRange(D1, D20))
-                .thenReturn(List.of(row1, row2));
+        List<Map<String, Object>> res = reportService.getTopTools(from, to);
 
-        List<Map<String, Object>> ranking = reportService.getTopTools(D1, D20);
-
-        assertThat(ranking).hasSize(2);
-        assertThat(ranking.get(0).get("toolGroupId")).isEqualTo(1L);
-        assertThat(ranking.get(1).get("toolGroupId")).isEqualTo(2L);
+        assertThat(res).hasSize(2);
+        assertThat(res.get(0).get("loanCount")).isEqualTo(15L);
     }
 
-    @Test
-    @DisplayName("Ranking con valores extremos (total = 0 y total = 999999)")
-    void whenTopTools_withExtremeTotals_thenAccepted() {
-        Map<String, Object> row1 = Map.of(
-                "toolGroupId", 1L,
-                "toolGroupName", "Zero",
-                "total", 0L
-        );
-        Map<String, Object> row2 = Map.of(
-                "toolGroupId", 2L,
-                "toolGroupName", "Huge",
-                "total", 999_999L
-        );
+    @Test @DisplayName("getTopTools – vacía")
+    void getTopTools_empty(){
+        LocalDateTime from = LocalDateTime.of(2025, 2, 1, 0, 0);
+        LocalDateTime to   = LocalDateTime.of(2025, 2, 1, 0, 0);
+        when(loanRepository.countLoansByToolGroupInRange(from, to)).thenReturn(List.of());
 
-        when(loanRepository.countLoansByToolGroupInRange(D1, D20))
-                .thenReturn(List.of(row1, row2));
+        List<Map<String, Object>> res = reportService.getTopTools(from, to);
 
-        List<Map<String, Object>> ranking = reportService.getTopTools(D1, D20);
-
-        assertThat(ranking).hasSize(2);
-        assertThat(ranking.get(0).get("total")).isEqualTo(0L);
-        assertThat(ranking.get(1).get("total")).isEqualTo(999_999L);
+        assertThat(res).isEmpty();
     }
 
-    /* ---------- CONCURRENCIA ---------- */
-    /*
-    @Test
-    @DisplayName("100 hilos consultando simultáneamente – sin excepciones")
-    void whenConcurrentActiveLoans_thenNoException() throws InterruptedException {
-        int threads = 100;
-        ExecutorService pool = Executors.newFixedThreadPool(threads);
-        CountDownLatch latch = new CountDownLatch(threads);
-        AtomicReference<Exception> error = new AtomicReference<>();
+    /* ======================================================================
+              4. getCustomersWithDebt
+       ====================================================================== */
 
-        when(loanRepository.findActiveLoansInRange(D1, D20))
-                .thenReturn(List.of());
+    @Test @DisplayName("getCustomersWithDebt – con datos")
+    void getCustomersWithDebt_withData(){
+        LocalDateTime now = LocalDateTime.of(2025, 3, 15, 0, 0);
+        List<CustomerDebtDTO> data = List.of(mock(CustomerDebtDTO.class));
+        when(customerRepository.findCustomersWithDebt(now)).thenReturn(data);
 
-        for (int i = 0; i < threads; i++) {
-            pool.submit(() -> {
-                try {
-                    reportService.getActiveLoans(D1, D20);
-                } catch (Exception e) {
-                    error.set(e);
-                } finally {
-                    latch.countDown();
-                }
-            });
-        }
-        latch.await();
-        pool.shutdown();
+        List<CustomerDebtDTO> res = reportService.getCustomersWithDebt(now);
 
-        assertThat(error.get()).isNull();
-        verify(loanRepository, times(threads)).findActiveLoansInRange(D1, D20);
+        assertThat(res).hasSize(1);
+        verify(customerRepository).findCustomersWithDebt(now);
     }
 
-    /* ---------- Helpers ---------- */
-    /*
-    private ToolGroupEntity buildToolGroup() {
-        TariffEntity tariff = new TariffEntity();
-        tariff.setDailyRentalRate(100.0);
-        tariff.setDailyFineRate(100.0 * 2);
+    @Test @DisplayName("getCustomersWithDebt – vacía")
+    void getCustomersWithDebt_empty(){
+        LocalDateTime now = LocalDateTime.of(2025, 3, 15, 0, 0);
+        when(customerRepository.findCustomersWithDebt(now)).thenReturn(List.of());
 
-        ToolGroupEntity g = new ToolGroupEntity();
-        g.setId(1L);
-        g.setName("T");
-        g.setCategory("C");
-        g.setReplacementValue(1000.0);
-        g.setTariff(tariff);
-        return g;
-    }
+        List<CustomerDebtDTO> res = reportService.getCustomersWithDebt(now);
 
-    private CustomerEntity buildCustomer(String name) {
-        CustomerEntity c = new CustomerEntity();
-        c.setId(1L);
-        c.setName(name);
-        c.setRut("11.111.111-1");
-        c.setPhone("+56911111111");
-        c.setEmail(name + "@test.com");
-        c.setStatus(CustomerStatus.ACTIVE);
-        return c;
+        assertThat(res).isEmpty();
     }
-
-    private LoanEntity buildLoan(CustomerEntity c, ToolUnitEntity unit) {
-        LoanEntity l = new LoanEntity();
-        l.setId(1L);
-        l.setCustomer(c);
-        l.setToolUnit(unit);
-        l.setLoanDate(D5);
-        l.setDueDate(D15);
-        l.setReturnDate(null);
-        l.setTotalCost(100.0);
-        l.setFineAmount(0.0);
-        l.setDamageCharge(0.0);
-        return l;
-    }
-    */
 }

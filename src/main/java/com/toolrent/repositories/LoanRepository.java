@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Repository
 public interface LoanRepository extends JpaRepository<LoanEntity, Long> {
@@ -92,6 +93,17 @@ public interface LoanRepository extends JpaRepository<LoanEntity, Long> {
         ORDER BY l.returnDate DESC
     """)
     List<LoanActiveDTO> findPendingPayment();
+
+    // Consulta el último préstamo devuelto de una unidad
+    @Query("""
+    SELECT l
+    FROM LoanEntity l
+    WHERE l.toolUnit.id = :unitId
+      AND l.returnDate IS NOT NULL
+    ORDER BY l.returnDate DESC
+    LIMIT 1
+""")
+    Optional<LoanEntity> findTopByToolUnitIdAndReturnDateIsNotNullOrderByReturnDateDesc(@Param("unitId") Long unitId);
 
     /* ---------- Métodos de validación de negocio ---------- */
 

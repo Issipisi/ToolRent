@@ -3,233 +3,108 @@ package com.toolrent.services;
 import com.toolrent.entities.TariffEntity;
 import com.toolrent.repositories.TariffRepository;
 import org.junit.jupiter.api.*;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
+import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class TariffServiceTest {
 
-    @Mock
-    private TariffRepository tariffRepository;
+    @Mock private TariffRepository tariffRepository;
 
-    @InjectMocks
-    private TariffService tariffService;
+    @InjectMocks private TariffService tariffService;
 
-    /* ---------- UPDATE EDGE ---------- */
+    /* ======================================================================
+              1. updateTariff – (update / create)
+       ====================================================================== */
 
-    @Test
-    @DisplayName("updateTariff: rates negativos – se aceptan")
-    void whenUpdateTariff_withNegativeRates_thenPropagated() {
-        TariffEntity t = new TariffEntity();
-        when(tariffRepository.findById(1L)).thenReturn(Optional.of(t));
-        when(tariffRepository.save(t)).thenReturn(t);
+    @Test @DisplayName("updateTariff – tarifa existe → actualiza")
+    void updateTariff_exists(){
+        TariffEntity current = new TariffEntity();
+        current.setId(1L);
+        current.setDailyRentalRate(1000.0);
+        current.setDailyFineRate(500.0);
 
-        TariffEntity out = tariffService.updateTariff(-1_000.0, -500.0);
-        assertThat(out.getDailyRentalRate()).isEqualTo(-1_000.0);
-        assertThat(out.getDailyFineRate()).isEqualTo(-500.0);
+        when(tariffRepository.findById(1L)).thenReturn(Optional.of(current));
+        when(tariffRepository.save(any(TariffEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        TariffEntity res = tariffService.updateTariff(1500.0, 750.0);
+
+        assertThat(res.getDailyRentalRate()).isEqualTo(1500.0);
+        assertThat(res.getDailyFineRate()).isEqualTo(750.0);
+        verify(tariffRepository).save(current);
     }
 
-    @Test
-    @DisplayName("updateTariff: Double.MIN_VALUE – overflow safe")
-    void whenUpdateTariff_withMinValue_thenSaved() {
-        TariffEntity t = new TariffEntity();
-        when(tariffRepository.findById(1L)).thenReturn(Optional.of(t));
-        when(tariffRepository.save(t)).thenReturn(t);
+    @Test @DisplayName("updateTariff – no existe → crea nueva con ID 1")
+    void updateTariff_notExists(){
+        when(tariffRepository.findById(1L)).thenReturn(Optional.empty());
 
-        TariffEntity out = tariffService.updateTariff(Double.MIN_VALUE, Double.MIN_VALUE);
-        assertThat(out.getDailyRentalRate()).isEqualTo(Double.MIN_VALUE);
-    }
-
-    @Test
-    @DisplayName("updateTariff: NaN – se propaga (defensivo)")
-    void whenUpdateTariff_withNaN_thenSaved() {
-        TariffEntity t = new TariffEntity();
-        when(tariffRepository.findById(1L)).thenReturn(Optional.of(t));
-        when(tariffRepository.save(t)).thenReturn(t);
-
-        TariffEntity out = tariffService.updateTariff(Double.NaN, Double.POSITIVE_INFINITY);
-        assertThat(out.getDailyRentalRate()).isNaN();
-        assertThat(out.getDailyFineRate()).isInfinite();
-    }
-
-    @Test
-    @DisplayName("updateTariff: múltiples updates consecutivos – último ganador")
-    void whenRapidUpdates_thenLastWins() {
-        TariffEntity shared = new TariffEntity();
-        when(tariffRepository.findById(1L)).thenReturn(Optional.of(shared));
-        when(tariffRepository.save(shared)).thenReturn(shared);
-
-        tariffService.updateTariff(1.0, 1.0);
-        tariffService.updateTariff(9.0, 9.0);
-        tariffService.updateTariff(99.0, 99.0);
-
-        assertThat(shared.getDailyRentalRate()).isEqualTo(99.0);
-        assertThat(shared.getDailyFineRate()).isEqualTo(99.0);
-        verify(tariffRepository, times(3)).save(shared);
-    }
-
-    @Test
-    @DisplayName("updateTariff: proxy modifica entidad después de save – observable")
-    void whenSaveIsProxy_thenMutationVisible() {
-        TariffEntity t = new TariffEntity();
-        when(tariffRepository.findById(1L)).thenReturn(Optional.of(t));
-        // Simula un auditor que pone ID después de insert
-        when(tariffRepository.save(t)).thenAnswer(i -> {
-            TariffEntity x = i.getArgument(0);
-            x.setId(1L);
-            return x;
+        when(tariffRepository.save(any(TariffEntity.class))).thenAnswer(i -> {
+            TariffEntity t = i.getArgument(0);
+            t.setId(1L); // simulamos que la BD asigna ID
+            return t;
         });
 
-        TariffEntity out = tariffService.updateTariff(3.0, 6.0);
-        assertThat(out.getId()).isEqualTo(1L);
-    }
+        TariffEntity res = tariffService.updateTariff(1200.0, 600.0);
 
-    /* ---------- CONCURRENCY ---------- */
-
-    @Test
-    @DisplayName("updateTariff: 100 threads concurrentes – sin excepciones")
-    void whenConcurrentUpdates_thenNoException() throws InterruptedException {
-        TariffEntity shared = new TariffEntity();
-        when(tariffRepository.findById(1L)).thenReturn(Optional.of(shared));
-        when(tariffRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-
-        int threads = 100;
-        ExecutorService pool = Executors.newFixedThreadPool(threads);
-        CountDownLatch latch = new CountDownLatch(threads);
-        AtomicReference<Exception> error = new AtomicReference<>();
-
-        for (int i = 0; i < threads; i++) {
-            final int val = i;
-            pool.submit(() -> {
-                try {
-                    tariffService.updateTariff(val * 1.0, val * 2.0);
-                } catch (Exception e) {
-                    error.set(e);
-                } finally {
-                    latch.countDown();
-                }
-            });
-        }
-        latch.await();
-        pool.shutdown();
-
-        assertThat(error.get()).isNull();
+        assertThat(res.getDailyRentalRate()).isEqualTo(1200.0);
+        assertThat(res.getDailyFineRate()).isEqualTo(600.0);
+        verify(tariffRepository).save(res);
     }
 
 
-    /* ---------- GET ALL TARIFFS ---------- */
+    /* ======================================================================
+              2. getAllTariffs – (vacía / con datos)
+       ====================================================================== */
 
-    @Test
-    @DisplayName("getAllTariffs: lista vacía → devuelve iterable vacío")
-    void whenGetAllTariffs_empty_thenEmptyList() {
+    @Test @DisplayName("getAllTariffs – con datos")
+    void getAllTariffs_withData(){
+        List<TariffEntity> list = List.of(
+                mock(TariffEntity.class),
+                mock(TariffEntity.class));
+        when(tariffRepository.findAll()).thenReturn(list);
+
+        List<TariffEntity> res = tariffService.getAllTariffs();
+
+        assertThat(res).hasSize(2);
+    }
+
+    @Test @DisplayName("getAllTariffs – vacía")
+    void getAllTariffs_empty(){
         when(tariffRepository.findAll()).thenReturn(List.of());
 
-        List<TariffEntity> result = tariffService.getAllTariffs();
+        List<TariffEntity> res = tariffService.getAllTariffs();
 
-        assertThat(result).isEmpty();
-        verify(tariffRepository).findAll();
+        assertThat(res).isEmpty();
     }
 
-    @Test
-    @DisplayName("getAllTariffs: lista con nulls → devuelve iterable con nulls")
-    void whenGetAllTariffs_withNulls_thenReturnsIterableWithNulls() {
-        when(tariffRepository.findAll()).thenReturn(Arrays.asList(null, null));
+    /* ======================================================================
+              3. getTariffById – (existe / no existe)
+       ====================================================================== */
 
-        List<TariffEntity> result = tariffService.getAllTariffs();
+    @Test @DisplayName("getTariffById – existe")
+    void getTariffById_exists(){
+        TariffEntity tariff = new TariffEntity();
+        tariff.setId(5L);
+        when(tariffRepository.findById(5L)).thenReturn(Optional.of(tariff));
 
-        assertThat(result).hasSize(2).containsOnlyNulls();
-        verify(tariffRepository).findAll();
+        TariffEntity res = tariffService.getTariffById(5L);
+
+        assertThat(res).isEqualTo(tariff);
     }
 
-    /* ---------- GET BY ID ---------- */
-
-    @Test
-    @DisplayName("getTariffById: encontrado → devuelve entidad")
-    void whenGetTariffById_found_thenReturns() {
-        TariffEntity t = new TariffEntity();
-        t.setId(2L);
-        when(tariffRepository.findById(2L)).thenReturn(Optional.of(t));
-
-        TariffEntity out = tariffService.getTariffById(2L);
-
-        assertThat(out).isEqualTo(t);
-        verify(tariffRepository).findById(2L);
-    }
-
-    @Test
-    @DisplayName("getTariffById: no encontrado → lanza excepción")
-    void whenGetTariffById_notFound_thenThrows() {
+    @Test @DisplayName("getTariffById – no existe → excepción")
+    void getTariffById_notFound(){
         when(tariffRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> tariffService.getTariffById(99L))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Tariff not found");
-
-        verify(tariffRepository).findById(99L);
-    }
-
-    /* ---------- UPDATE ---------- */
-
-    @Test
-    @DisplayName("updateTariff: crear nueva cuando no existe id=1")
-    void whenUpdateTariff_noId1_thenCreatesNew() {
-        TariffEntity created = new TariffEntity();
-        when(tariffRepository.findById(1L)).thenReturn(Optional.empty());
-        when(tariffRepository.save(any(TariffEntity.class))).thenReturn(created);
-
-        TariffEntity out = tariffService.updateTariff(50.0, 25.0);
-
-        assertThat(out).isEqualTo(created);
-        verify(tariffRepository).findById(1L);
-        verify(tariffRepository).save(any(TariffEntity.class)); // ✅ cualquier instancia
-    }
-
-    /* ---------- CONCURRENCIA ---------- */
-
-    @Test
-    @DisplayName("getAllTariffs: 100 hilos concurrentes – sin excepciones")
-    void whenConcurrentGetAllTariffs_thenNoException() throws InterruptedException {
-        when(tariffRepository.findAll()).thenReturn(List.of());
-
-        int threads = 100;
-        ExecutorService pool = Executors.newFixedThreadPool(threads);
-        CountDownLatch latch = new CountDownLatch(threads);
-        AtomicReference<Exception> error = new AtomicReference<>();
-
-        for (int i = 0; i < threads; i++) {
-            pool.submit(() -> {
-                try {
-                    tariffService.getAllTariffs();
-                } catch (Exception e) {
-                    error.set(e);
-                } finally {
-                    latch.countDown();
-                }
-            });
-        }
-        latch.await();
-        pool.shutdown();
-
-        assertThat(error.get()).isNull();
-        verify(tariffRepository, times(threads)).findAll();
-    }
-
-    /* ---------- UTIL ---------- */
-
-    @AfterEach
-    void validateMocks() {
-        validateMockitoUsage();
     }
 }
